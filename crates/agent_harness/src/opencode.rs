@@ -28,8 +28,8 @@ use discovery::{
     context_windows, models_from_providers, pick_variant, skills_from_wire,
 };
 use feed::{
-    ChildRun, PendingSpawn, SessionFeed, bind_child, context_usage_event, map_questions,
-    part_delta_events, part_snapshot_events, tag, task_completion,
+    ChildRun, PendingSpawn, SessionFeed, bind_child, context_usage_event, generated_title,
+    map_questions, part_delta_events, part_snapshot_events, tag, task_completion,
 };
 use server::{BusMessage, Protocol, Server, ServerVersion, bus_task, post_error_message};
 
@@ -1981,6 +1981,23 @@ async fn handle_bus_event(context: BusContext<'_>) -> BusOutcome {
                 turn.error = Some(message.clone());
             }
             if !duplicate && !send(event_tx, AgentEvent::Error { message }).await {
+                return BusOutcome::ConsumerGone;
+            }
+            BusOutcome::Continue
+        }
+        "session.updated" if is_ours => {
+            let info = properties.get("info").unwrap_or(&Value::Null);
+            let Some(title) = generated_title(info) else {
+                return BusOutcome::Continue;
+            };
+            if main_feed.title.as_deref() == Some(title) {
+                return BusOutcome::Continue;
+            }
+            main_feed.title = Some(title.to_owned());
+            let event = AgentEvent::TitleChanged {
+                title: title.to_owned(),
+            };
+            if !send(event_tx, event).await {
                 return BusOutcome::ConsumerGone;
             }
             BusOutcome::Continue

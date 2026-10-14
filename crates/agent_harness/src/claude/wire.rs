@@ -47,6 +47,18 @@ pub(crate) struct SystemFrame {
     pub compact_result: Option<String>,
     #[serde(default)]
     pub compact_error: Option<String>,
+    #[serde(default)]
+    pub attempt: Option<Value>,
+    #[serde(default)]
+    pub max_retries: Option<Value>,
+    #[serde(default)]
+    pub retry_delay_ms: Option<Value>,
+    #[serde(default)]
+    pub error_status: Option<Value>,
+    #[serde(default)]
+    pub error: Option<Value>,
+    #[serde(default)]
+    pub no_response: Option<Value>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -192,6 +204,30 @@ pub(crate) struct ControlRequestBody {
     pub tool_name: String,
     #[serde(default)]
     pub input: Value,
+    #[serde(flatten)]
+    pub other: serde_json::Map<String, Value>,
+}
+
+impl ControlRequestBody {
+    pub fn text(&self, key: &str) -> Option<&str> {
+        self.other
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+    }
+}
+
+/// The id of a control request too malformed to parse, so it can still be answered.
+pub(crate) fn unreadable_control_request_id(line: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(line).ok()?;
+    if value.get("type").and_then(Value::as_str) != Some("control_request") {
+        return None;
+    }
+    value
+        .get("request_id")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 pub(crate) fn parse_frame(line: &str) -> Result<Frame, serde_json::Error> {
@@ -272,6 +308,19 @@ pub(crate) fn control_response_line(request_id: &str, response: Value) -> String
             "subtype": "success",
             "request_id": request_id,
             "response": response,
+        },
+    })
+    .to_string()
+}
+
+/// The CLI rejects the pending request with this message instead of waiting on it.
+pub(crate) fn control_error_line(request_id: &str, error: &str) -> String {
+    json!({
+        "type": "control_response",
+        "response": {
+            "subtype": "error",
+            "request_id": request_id,
+            "error": error,
         },
     })
     .to_string()

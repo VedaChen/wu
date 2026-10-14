@@ -7,6 +7,9 @@ release body.
 
 ## Unreleased
 
+- Fixed Claude Code chats that seemed stuck: Wu now shows when Claude is retrying its API, and answers questions from connected tools instead of waiting forever.
+- OpenCode chats now take the name OpenCode gives them instead of the start of your first message.
+
 ## 1.1.6 - 2026-10-11
 
 - Added "Pull From" to the Git sync menu, so you can pull any branch from any remote.

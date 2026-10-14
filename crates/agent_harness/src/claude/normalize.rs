@@ -4,7 +4,7 @@ use crate::{
 };
 use serde_json::Value;
 
-use super::wire::{ContentBlock, Frame};
+use super::wire::{ContentBlock, Frame, SystemFrame};
 
 fn assistant_error_text(code: &str) -> String {
     match code {
@@ -40,6 +40,37 @@ fn result_error_text(subtype: &str) -> &'static str {
         "error_max_structured_output_retries" => "The run exhausted its structured-output retries.",
         _ => "The run ended with an error.",
     }
+}
+
+fn api_retry_text(frame: &SystemFrame) -> String {
+    let number = |value: &Option<Value>| value.as_ref().and_then(Value::as_u64);
+    let reason = if frame.no_response.is_some() {
+        "Claude's API stopped responding".to_owned()
+    } else {
+        match frame.error.as_ref().and_then(Value::as_str) {
+            Some("overloaded") => "Claude's API is overloaded".to_owned(),
+            Some("rate_limit") => "Claude hit a rate limit".to_owned(),
+            Some("authentication_failed") => "Claude couldn't sign in to its API".to_owned(),
+            _ => match number(&frame.error_status) {
+                Some(status) => format!("Claude's API returned an error ({status})"),
+                None => "Claude's API request failed".to_owned(),
+            },
+        }
+    };
+    let mut text = format!("{reason}. Retrying");
+    if let Some(seconds) = number(&frame.retry_delay_ms)
+        .map(|milliseconds| milliseconds.div_ceil(1000))
+        .filter(|seconds| *seconds > 0)
+    {
+        text.push_str(&format!(" in {seconds}s"));
+    }
+    match (number(&frame.attempt), number(&frame.max_retries)) {
+        (Some(attempt), Some(max)) => text.push_str(&format!(" (attempt {attempt} of {max})")),
+        (Some(attempt), None) => text.push_str(&format!(" (attempt {attempt})")),
+        _ => {}
+    }
+    text.push('.');
+    text
 }
 
 fn is_internal_diagnostic(message: &str) -> bool {
@@ -154,6 +185,8 @@ pub(crate) struct Normalizer {
     // The CLI re-emits init (same session id) on every wake turn.
     saw_init: bool,
     compacting: bool,
+    // The CLI retries up to ten times; one notice per stretch of failures is enough.
+    retry_reported: bool,
     last_model: Option<String>,
     spawn_by_task_id: std::collections::HashMap<String, String>,
     spawn_by_tool_id: std::collections::HashMap<String, String>,
@@ -167,6 +200,7 @@ impl Normalizer {
         Self {
             saw_init: false,
             compacting: false,
+            retry_reported: false,
             last_model: None,
             spawn_by_task_id: std::collections::HashMap::new(),
             spawn_by_tool_id: std::collections::HashMap::new(),
@@ -381,6 +415,14 @@ impl Normalizer {
                     }
                     return events;
                 }
+                if f.subtype == "api_retry" {
+                    if std::mem::replace(&mut self.retry_reported, true) {
+                        return Vec::new();
+                    }
+                    return vec![AgentEvent::Error {
+                        message: api_retry_text(&f),
+                    }];
+                }
                 if f.subtype == "compact_boundary" {
                     self.compacting = false;
                     let metadata = f.compact_metadata.unwrap_or_default();
@@ -447,6 +489,9 @@ impl Normalizer {
             }
 
             Frame::Assistant(f) => {
+                if f.parent_tool_use_id.is_none() {
+                    self.retry_reported = false;
+                }
                 if let Some(parent) = &f.parent_tool_use_id {
                     let parent = self.spawn_by_tool_id.get(parent).unwrap_or(parent);
                     // Subagent text arrives only as full blocks here, never as tagged deltas.
@@ -624,6 +669,7 @@ impl Normalizer {
             }
 
             Frame::Result(f) => {
+                self.retry_reported = false;
                 let model_usage = self
                     .last_model
                     .as_ref()
@@ -1324,6 +1370,33 @@ mod tests {
         );
         assert!(matches!(&ev[1], AgentEvent::Subagent { event, .. }
             if matches!(event.as_ref(), AgentEvent::ToolCall { .. })));
+    }
+
+    #[test]
+    fn api_retries_show_one_notice_per_stretch_of_failures() {
+        let mut norm = Normalizer::new();
+        let mut feed = |raw: &str| {
+            let frame = crate::claude::wire::parse_frame(raw).unwrap();
+            norm.normalize(frame, false)
+        };
+        let overloaded = r#"{"type":"system","subtype":"api_retry","attempt":1,"max_retries":10,"retry_delay_ms":1500,"error_status":529,"error":"overloaded"}"#;
+        assert_eq!(
+            feed(overloaded),
+            [AgentEvent::Error {
+                message: "Claude's API is overloaded. Retrying in 2s (attempt 1 of 10).".into()
+            }]
+        );
+        assert!(feed(overloaded).is_empty(), "later attempts stay quiet");
+
+        feed(r#"{"type":"assistant","message":{"content":[{"type":"text","text":"ok"}]}}"#);
+        assert_eq!(
+            feed(
+                r#"{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":0,"error_status":null,"error":"unknown","no_response":{"waited_ms":60000}}"#
+            ),
+            [AgentEvent::Error {
+                message: "Claude's API stopped responding. Retrying (attempt 2 of 10).".into()
+            }]
+        );
     }
 
     #[test]

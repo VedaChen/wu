@@ -1548,6 +1548,7 @@ impl AgentSession {
                     self.send_next_queued(cx);
                 }
             }
+            AgentEvent::TitleChanged { title } => self.adopt_agent_title(&title, cx),
             AgentEvent::GeneratedImage { path, .. } => {
                 self.transcript.text_block_open = false;
                 self.transcript.entries.push(Entry::Image { path: path.into() });
@@ -1755,6 +1756,27 @@ impl AgentSession {
 
     fn cancel_running_tools(&mut self) {
         self.transcript.cancel_running_tools();
+    }
+
+    /// Replaces the title taken from the first message, but never one the user typed.
+    fn adopt_agent_title(&mut self, title: &str, cx: &mut Context<Self>) {
+        let first_prompt = self
+            .transcript
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                Entry::User { text, .. } => Some(text),
+                _ => None,
+            });
+        if !first_prompt.is_some_and(|text| self.metadata.title == title_from(text)) {
+            return;
+        }
+        let title = title_from(title);
+        if title.is_empty() || title == self.metadata.title {
+            return;
+        }
+        self.metadata.title = title;
+        self.save_metadata(cx);
     }
 
     fn set_native_session_id(&mut self, session_id: String, cx: &mut Context<Self>) {
@@ -3546,6 +3568,38 @@ done
                     ("Couldn't compact the conversation: prompt_too_long", true),
                 ]
             );
+        });
+    }
+
+    #[gpui::test]
+    async fn agent_titles_replace_the_first_message_but_not_a_rename(cx: &mut TestAppContext) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Opencode, directory.path().to_path_buf(), cx)
+        });
+        let prompt = "Can you look at why login redirects twice after the session expires?";
+        let title_changed = |title: &str| AgentEvent::TitleChanged {
+            title: title.into(),
+        };
+        let id = session.update(cx, |session, cx| {
+            session
+                .transcript
+                .push_user(prompt.into(), Vec::new(), Vec::new());
+            session.metadata.title = title_from(prompt);
+            session.apply_event(title_changed("Fix double login redirect"), cx);
+            assert_eq!(session.metadata.title, "Fix double login redirect");
+            session.apply_event(title_changed("Something else"), cx);
+            assert_eq!(session.metadata.title, "Fix double login redirect");
+            session.metadata.title = title_from(prompt);
+            session.metadata.id.clone()
+        });
+        store.update(cx, |store, cx| {
+            store.rename_session(&id, "Login bug".into(), cx)
+        });
+        session.update(cx, |session, cx| {
+            session.apply_event(title_changed("Fix double login redirect"), cx);
+            assert_eq!(session.metadata.title, "Login bug");
         });
     }
 

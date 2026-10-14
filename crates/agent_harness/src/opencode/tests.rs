@@ -577,6 +577,56 @@ async fn completed_turn_keeps_mailbox_alive_for_the_next_queued_request() {
 }
 
 #[tokio::test]
+async fn generated_titles_reach_the_chat_once_and_after_the_turn() {
+    let mut wire = TurnWire::start_config(false, "1.18.21", json!({ "keepSteering": true })).await;
+    wire.request("/prompt_async").await;
+    wire.status("busy");
+    let updated = |session: &str, title: &str| json!({"type":"session.updated","properties":{"sessionID":session,"info":{"id":session,"title":title}}});
+    wire.bus
+        .send(updated("fixture", "New session - 2026-10-14T10:00:00.000Z"))
+        .unwrap();
+    wire.bus
+        .send(updated("other", "Someone else's chat"))
+        .unwrap();
+    wire.bus
+        .send(updated("fixture", "Fix the login bug"))
+        .unwrap();
+    wire.bus
+        .send(updated("fixture", "Fix the login bug"))
+        .unwrap();
+    wire.status("idle");
+    wire.idle();
+
+    let mut titles = Vec::new();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match wire.events.recv().await.unwrap().unwrap() {
+                AgentEvent::TitleChanged { title } => titles.push(title),
+                AgentEvent::Done { .. } => break,
+                _ => {}
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(titles, ["Fix the login bug"]);
+
+    wire.bus
+        .send(updated("fixture", "Fix the login redirect"))
+        .unwrap();
+    let late = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let AgentEvent::TitleChanged { title } = wire.events.recv().await.unwrap().unwrap() {
+                return title;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(late, "Fix the login redirect");
+}
+
+#[tokio::test]
 async fn queued_turn_ignores_previous_turn_duplicate_idle() {
     for status_first in [true, false] {
         let mut wire = TurnWire::start(true).await;

@@ -509,6 +509,9 @@ pub enum AgentEvent {
     UserMessage {
         text: String,
     },
+    TitleChanged {
+        title: String,
+    },
     #[serde(rename_all = "camelCase")]
     Subagent {
         parent_tool_use_id: String,

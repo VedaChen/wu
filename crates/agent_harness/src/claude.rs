@@ -25,7 +25,10 @@ use crate::process::{Child, ChildStdin, Command, Stdio};
 use crate::{Harness, HarnessError, RunControls, shutdown_child};
 use catalog::{apply_ultrathink, to_effort};
 use normalize::Normalizer;
-use wire::{ControlRequestFrame, Frame, allow_response, control_response_line, deny_response};
+use wire::{
+    ControlRequestBody, ControlRequestFrame, Frame, allow_response, control_error_line,
+    control_response_line, deny_response,
+};
 
 pub const PERMISSION_ALLOW: &str = "Allow";
 pub const PERMISSION_DENY: &str = "Deny";
@@ -849,7 +852,13 @@ async fn run_session(session: Session) {
                     let frame = match wire::parse_frame(line) {
                         Ok(frame) => frame,
                         Err(e) => {
-                            log::debug!("unparseable frame (skipped): {e}");
+                            if let Some(request_id) = wire::unreadable_control_request_id(line) {
+                                log::warn!("couldn't read a claude request ({e}); answering with an error");
+                                let line = control_error_line(&request_id, "Wu couldn't read this request.");
+                                stdin_tx.send(StdinMsg::Line(line)).ok();
+                            } else {
+                                log::debug!("unparseable frame (skipped): {e}");
+                            }
                             continue;
                         }
                     };
@@ -1045,9 +1054,19 @@ fn handle_control_request(
     request_input: &Arc<RequestInputFn>,
     stdin_tx: &mpsc::UnboundedSender<StdinMsg>,
 ) {
-    if req.request.subtype != "can_use_tool" {
-        log::debug!("unhandled control_request subtype: {}", req.request.subtype);
-        return;
+    match req.request.subtype.as_str() {
+        "can_use_tool" => {}
+        "elicitation" => {
+            answer_elicitation(req, request_input, stdin_tx);
+            return;
+        }
+        subtype => {
+            log::warn!("claude sent an unsupported {subtype} request; answering with an error");
+            let error = format!("Wu can't answer {subtype} requests.");
+            let line = control_error_line(&req.request_id, &error);
+            stdin_tx.send(StdinMsg::Line(line)).ok();
+            return;
+        }
     }
     if req.request.tool_name != "AskUserQuestion" {
         if skip_prompts {
@@ -1092,6 +1111,79 @@ fn handle_control_request(
         let line = control_response_line(&request_id, allow_response(updated));
         if stdin_tx.send(StdinMsg::Line(line)).is_err() {
             log::debug!("claude stdin writer gone before the AskUserQuestion answer was sent");
+        }
+    });
+}
+
+fn elicitation_question(request: &ControlRequestBody) -> Option<UserInputQuestion> {
+    let is_form = match request.other.get("mode") {
+        None | Some(Value::Null) => true,
+        Some(mode) => mode.as_str() == Some("form"),
+    };
+    let has_fields = request
+        .other
+        .get("requested_schema")
+        .and_then(|schema| schema.get("properties"))
+        .and_then(Value::as_object)
+        .is_some_and(|properties| !properties.is_empty());
+    let message = request.text("message")?;
+    if !is_form || has_fields {
+        return None;
+    }
+    let header = request
+        .text("display_name")
+        .or_else(|| request.text("mcp_server_name"))
+        .unwrap_or("Claude");
+    Some(UserInputQuestion {
+        id: uuid::Uuid::new_v4().to_string(),
+        header: header.into(),
+        question: message.into(),
+        options: vec![PERMISSION_ALLOW.into(), PERMISSION_DENY.into()],
+        multi_select: false,
+        prefill: None,
+        multiline: false,
+    })
+}
+
+fn answer_elicitation(
+    req: ControlRequestFrame,
+    request_input: &Arc<RequestInputFn>,
+    stdin_tx: &mpsc::UnboundedSender<StdinMsg>,
+) {
+    let request_id = req.request_id;
+    let Some(question) = elicitation_question(&req.request) else {
+        log::warn!(
+            "declining a {} question from {} that Wu can't show",
+            req.request.text("mode").unwrap_or("form"),
+            req.request
+                .text("mcp_server_name")
+                .unwrap_or("an unnamed tool")
+        );
+        let line = control_response_line(&request_id, serde_json::json!({ "action": "decline" }));
+        stdin_tx.send(StdinMsg::Line(line)).ok();
+        return;
+    };
+    let request_input = Arc::clone(request_input);
+    let stdin_tx = stdin_tx.clone();
+    tokio::spawn(async move {
+        let answers = (request_input)(vec![question.clone()])
+            .await
+            .unwrap_or_default();
+        let accept = answers.iter().any(|answer| {
+            answer.question_id == question.id
+                && answer
+                    .labels
+                    .iter()
+                    .any(|label| label.eq_ignore_ascii_case(PERMISSION_ALLOW))
+        });
+        let response = if accept {
+            serde_json::json!({ "action": "accept", "content": {} })
+        } else {
+            serde_json::json!({ "action": "decline" })
+        };
+        let line = control_response_line(&request_id, response);
+        if stdin_tx.send(StdinMsg::Line(line)).is_err() {
+            log::debug!("claude stdin writer gone before the elicitation answer was sent");
         }
     });
 }
@@ -1184,6 +1276,111 @@ fn flag_settings(request: &RunRequest) -> serde_json::Map<String, Value> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    async fn answer_to(
+        raw: Value,
+        request_input: &Arc<RequestInputFn>,
+        stdin_tx: &mpsc::UnboundedSender<StdinMsg>,
+        stdin_rx: &mut mpsc::UnboundedReceiver<StdinMsg>,
+    ) -> Value {
+        let request: ControlRequestFrame = serde_json::from_value(raw).unwrap();
+        handle_control_request(request, false, request_input, stdin_tx);
+        let reply = tokio::time::timeout(std::time::Duration::from_secs(5), stdin_rx.recv());
+        match reply.await {
+            Ok(Some(StdinMsg::Line(line))) => serde_json::from_str(&line).unwrap(),
+            _ => panic!("the request was never answered"),
+        }
+    }
+
+    #[test]
+    fn unreadable_control_requests_still_yield_their_id() {
+        let broken = r#"{"type":"control_request","request_id":"r9","request":{"subtype":"can_use_tool","tool_name":null}}"#;
+        assert!(wire::parse_frame(broken).is_err());
+        assert_eq!(
+            wire::unreadable_control_request_id(broken).as_deref(),
+            Some("r9")
+        );
+        assert_eq!(
+            wire::unreadable_control_request_id(r#"{"type":"assistant","request_id":"x"}"#),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn every_control_request_gets_an_answer() {
+        let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel();
+        let asked = Arc::new(std::sync::Mutex::new(Vec::<UserInputQuestion>::new()));
+        let request_input: Arc<RequestInputFn> = Arc::new(Box::new({
+            let asked = asked.clone();
+            move |questions: Vec<UserInputQuestion>| {
+                let (answer_tx, answer_rx) = tokio::sync::oneshot::channel();
+                let answers = questions
+                    .iter()
+                    .map(|question| UserInputAnswer {
+                        question_id: question.id.clone(),
+                        labels: vec![PERMISSION_ALLOW.into()],
+                    })
+                    .collect();
+                asked.lock().unwrap().extend(questions);
+                answer_tx.send(answers).ok();
+                answer_rx
+            }
+        }));
+        let mut answer =
+            async |raw: Value| answer_to(raw, &request_input, &stdin_tx, &mut stdin_rx).await;
+
+        let unknown =
+            answer(json!({"request_id": "r1", "request": {"subtype": "hook_callback"}})).await;
+        assert_eq!(unknown["response"]["subtype"], "error");
+        assert_eq!(unknown["response"]["request_id"], "r1");
+
+        let confirm = answer(json!({"request_id": "r2", "request": {
+            "subtype": "elicitation",
+            "mcp_server_name": "claude-in-chrome",
+            "message": "Allow Claude to use example.com?",
+            "mode": "form",
+            "requested_schema": {"type": "object", "properties": {}},
+        }}))
+        .await;
+        assert_eq!(confirm["response"]["request_id"], "r2");
+        assert_eq!(
+            confirm["response"]["response"],
+            json!({"action": "accept", "content": {}})
+        );
+
+        let link = answer(json!({"request_id": "r3", "request": {
+            "subtype": "elicitation",
+            "mcp_server_name": "linear",
+            "message": "Sign in to continue",
+            "mode": "url",
+            "url": "https://example.com/auth",
+        }}))
+        .await;
+        assert_eq!(link["response"]["response"], json!({"action": "decline"}));
+
+        let form = answer(json!({"request_id": "r4", "request": {
+            "subtype": "elicitation",
+            "mcp_server_name": "notes",
+            "message": "Pick a folder",
+            "requested_schema": {"type": "object", "properties": {"folder": {"type": "string"}}},
+        }}))
+        .await;
+        assert_eq!(form["response"]["response"], json!({"action": "decline"}));
+
+        let odd = answer(json!({"request_id": "r5", "request": {
+            "subtype": "elicitation",
+            "mcp_server_name": null,
+            "message": "Continue?",
+            "mode": 7,
+        }}))
+        .await;
+        assert_eq!(odd["response"]["response"], json!({"action": "decline"}));
+
+        let asked = asked.lock().unwrap();
+        assert_eq!(asked.len(), 1, "only the plain confirmation is shown");
+        assert_eq!(asked[0].header, "claude-in-chrome");
+        assert_eq!(asked[0].question, "Allow Claude to use example.com?");
+    }
 
     #[test]
     fn auto_compact_limit_turns_on_claude_auto_compaction_at_that_window() {

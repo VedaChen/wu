@@ -19,6 +19,7 @@ pub(super) struct SessionFeed {
     pub(super) message_is_assistant: HashMap<String, bool>,
     pub(super) parts_awaiting_role: Vec<Value>,
     parts: HashMap<String, PartState>,
+    pub(super) title: Option<String>,
 }
 
 pub(super) struct ChildRun {
@@ -211,6 +212,18 @@ pub(super) fn part_snapshot_events(
     }
 }
 
+pub(super) fn generated_title(session: &Value) -> Option<&str> {
+    session
+        .get("title")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|title| {
+            !title.is_empty()
+                && !title.starts_with("New session - ")
+                && !title.starts_with("Child session - ")
+        })
+}
+
 pub(super) fn external_sessions(list: &Value) -> Vec<ExternalSession> {
     let mut sessions: Vec<ExternalSession> = list
         .as_array()
@@ -219,15 +232,7 @@ pub(super) fn external_sessions(list: &Value) -> Vec<ExternalSession> {
         .filter(|session| session.get("parentID").is_none_or(Value::is_null))
         .filter_map(|session| {
             let id = session.get("id")?.as_str()?.to_owned();
-            let title = session
-                .get("title")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|title| {
-                    !title.is_empty()
-                        && !title.starts_with("New session - ")
-                        && !title.starts_with("Child session - ")
-                })
+            let title = generated_title(session)
                 .unwrap_or("Untitled chat")
                 .to_owned();
             let updated_at = session
