@@ -1,17 +1,18 @@
 use super::{ChatView, icon};
-use crate::chat_style::{format_elapsed, ink, text_faint, ui};
+use crate::chat_style::{Chip, format_elapsed, ink, popover_card, text_faint, ui};
 use crate::session::AgentSession;
+use crate::usage_rings::menu_heading;
 use agent_harness::{BackgroundTaskKind, ToolCall};
 use gpui::{
-    AnyElement, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled, Task,
-    Window, div, px,
+    Anchor, AnyElement, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
+    IntoElement, ParentElement, Render, SharedString, Styled, Task, Window, div, point, px,
 };
 use std::time::Duration;
 use theme::ActiveTheme as _;
-use ui::{prelude::*, tooltip_container};
+use ui::{PopoverMenu, prelude::*};
 
 const TICK: Duration = Duration::from_secs(1);
-const TOOLTIP_MAX_WIDTH: f32 = 360.;
+const CARD_MAX_WIDTH: f32 = 360.;
 
 struct TaskRow {
     kind: BackgroundTaskKind,
@@ -65,31 +66,38 @@ impl ChatView {
         let elapsed = format_elapsed(oldest.elapsed().as_secs());
         let colors = cx.theme().colors();
         let session = self.session.clone();
+        let summary = h_flex()
+            .debug_selector(|| "agent-background-tasks".into())
+            .h(px(20.))
+            .px(px(7.))
+            .gap(px(5.))
+            .text_size(ui(11.))
+            .child(
+                div()
+                    .size(px(6.))
+                    .rounded_full()
+                    .bg(cx.theme().status().info),
+            )
+            .child(label)
+            .child(div().text_color(text_faint(cx)).child(elapsed));
         Some(
-            h_flex()
-                .id("agent-background-tasks")
-                .debug_selector(|| "agent-background-tasks".into())
-                .flex_none()
-                .h(px(20.))
-                .px(px(7.))
-                .gap(px(5.))
-                .rounded(px(6.))
-                .text_size(ui(11.))
-                .text_color(colors.text_muted)
-                .hover(|style| style.bg(ink(0.06, cx)).text_color(colors.text))
-                .child(
-                    div()
-                        .size(px(6.))
-                        .rounded_full()
-                        .bg(cx.theme().status().info),
-                )
-                .child(label)
-                .child(div().text_color(text_faint(cx)).child(elapsed))
-                .tooltip(move |_, cx| {
-                    let session = session.clone();
-                    cx.new(|cx| BackgroundTasksTooltip::new(session, cx)).into()
-                })
-                .into_any_element(),
+            PopoverMenu::new(SharedString::from(format!(
+                "agent-background-tasks-{}",
+                cx.entity_id()
+            )))
+            .trigger(
+                Chip::new("agent-background-tasks", 6., summary)
+                    .hover_background(ink(0.06, cx))
+                    .text_colors(colors.text_muted, colors.text),
+            )
+            .menu(move |_, cx| {
+                let session = session.clone();
+                Some(cx.new(|cx| BackgroundTasksCard::new(session, cx)))
+            })
+            .anchor(Anchor::BottomLeft)
+            .attach(Anchor::TopLeft)
+            .offset(point(px(0.), px(-6.)))
+            .into_any_element(),
         )
     }
 }
@@ -124,12 +132,13 @@ fn background_rows(session: &AgentSession) -> Vec<TaskRow> {
         .collect()
 }
 
-struct BackgroundTasksTooltip {
+struct BackgroundTasksCard {
     session: Entity<AgentSession>,
+    focus_handle: FocusHandle,
     _tick: Task<()>,
 }
 
-impl BackgroundTasksTooltip {
+impl BackgroundTasksCard {
     fn new(session: Entity<AgentSession>, cx: &mut Context<Self>) -> Self {
         let tick = cx.spawn(async move |this, cx| {
             loop {
@@ -141,55 +150,83 @@ impl BackgroundTasksTooltip {
         });
         Self {
             session,
+            focus_handle: cx.focus_handle(),
             _tick: tick,
         }
     }
 }
 
-impl Render for BackgroundTasksTooltip {
+impl EventEmitter<DismissEvent> for BackgroundTasksCard {}
+
+impl Focusable for BackgroundTasksCard {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl Render for BackgroundTasksCard {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rows = background_rows(self.session.read(cx));
         let muted = cx.theme().colors().text_muted;
         let faint = text_faint(cx);
         let code_font = super::code_font(cx);
-        tooltip_container(cx, move |container, _| {
-            container
-                .max_w(px(TOOLTIP_MAX_WIDTH))
-                .py(px(6.))
-                .gap(px(6.))
-                .children(rows.into_iter().map(move |row| {
-                    v_flex()
-                        .gap(px(2.))
+        popover_card(cx)
+            .key_context("menu")
+            .track_focus(&self.focus_handle)
+            .on_action(cx.listener(|_, _: &menu::Cancel, _, cx| cx.emit(DismissEvent)))
+            .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(DismissEvent)))
+            .max_w(px(CARD_MAX_WIDTH))
+            .child(menu_heading("Background tasks", cx))
+            .when(rows.is_empty(), |this| {
+                this.child(
+                    div()
+                        .px(px(8.))
+                        .pb(px(6.))
                         .text_size(ui(12.))
-                        .child(
-                            h_flex()
-                                .gap(px(8.))
-                                .child(
-                                    icon(
-                                        match row.kind {
-                                            BackgroundTaskKind::Shell => IconName::AgentTerminal,
-                                            BackgroundTaskKind::Agent => IconName::AgentBot,
-                                            BackgroundTaskKind::Other => IconName::AgentWidget,
-                                        },
-                                        14.,
+                        .text_color(muted)
+                        .child("Nothing is running in the background."),
+                )
+            })
+            .child(
+                v_flex()
+                    .px(px(8.))
+                    .pb(px(6.))
+                    .gap(px(6.))
+                    .children(rows.into_iter().map(move |row| {
+                        v_flex()
+                            .gap(px(2.))
+                            .text_size(ui(12.))
+                            .child(
+                                h_flex()
+                                    .gap(px(8.))
+                                    .child(
+                                        icon(
+                                            match row.kind {
+                                                BackgroundTaskKind::Shell => {
+                                                    IconName::AgentTerminal
+                                                }
+                                                BackgroundTaskKind::Agent => IconName::AgentBot,
+                                                BackgroundTaskKind::Other => IconName::AgentWidget,
+                                            },
+                                            14.,
+                                        )
+                                        .text_color(muted),
                                     )
-                                    .text_color(muted),
-                                )
-                                .child(div().flex_1().min_w_0().truncate().child(row.title))
-                                .child(div().flex_none().text_color(faint).child(row.elapsed)),
-                        )
-                        .when_some(row.command, |this, command| {
-                            this.child(
-                                div()
-                                    .pl(px(22.))
-                                    .text_size(ui(11.))
-                                    .text_color(muted)
-                                    .font(code_font.clone())
-                                    .child(command),
+                                    .child(div().flex_1().min_w_0().truncate().child(row.title))
+                                    .child(div().flex_none().text_color(faint).child(row.elapsed)),
                             )
-                        })
-                }))
-        })
+                            .when_some(row.command, |this, command| {
+                                this.child(
+                                    div()
+                                        .pl(px(22.))
+                                        .text_size(ui(11.))
+                                        .text_color(muted)
+                                        .font(code_font.clone())
+                                        .child(command),
+                                )
+                            })
+                    })),
+            )
     }
 }
 
@@ -205,7 +242,7 @@ mod tests {
     use project::FakeFs;
 
     #[gpui::test]
-    async fn the_tooltip_lists_each_task_once(cx: &mut TestAppContext) {
+    async fn the_popup_lists_each_task_once(cx: &mut TestAppContext) {
         cx.update(|cx| {
             workspace::AppState::test(cx);
             editor::init(cx);

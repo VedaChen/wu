@@ -181,7 +181,7 @@ fn tracked_upper(label: &str) -> String {
     tracked
 }
 
-fn menu_heading(label: &str, cx: &App) -> impl IntoElement {
+pub(crate) fn menu_heading(label: &str, cx: &App) -> impl IntoElement {
     div()
         .px(px(8.))
         .pt(px(6.))
