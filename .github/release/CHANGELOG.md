@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+## 1.1.7 - 2026-10-15
+
 - Fixed Codex bundled with the ChatGPT desktop app not found.
 - Chats can now be renamed from their tabs.
 - Tables in agent replies can be copied as markdown.
