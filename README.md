@@ -26,6 +26,8 @@ Wu is a fast, native code editor written in Rust, with a clean, modern design an
 - [Linux AArch64](https://github.com/dstrml/wu/releases/latest/download/wu-linux-aarch64.tar.gz)
 - [Windows x86-64](https://github.com/dstrml/wu/releases/latest/download/Wu-x86_64.exe)
 
+On Linux, you can also install with `curl -fsSL https://wu.dstrml.org/install.sh | sh`.
+
 See [INSTALL.md](https://github.com/dstrml/wu/blob/main/docs/INSTALL.md) for more.
 
 ---

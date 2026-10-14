@@ -38,6 +38,16 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### Linux (x86-64 and AArch64)
 
+Run this in a terminal:
+
+```sh
+curl -fsSL https://wu.dstrml.org/install.sh | sh
+```
+
+It installs Wu into `~/.local`, adds the `wu` command, and adds Wu to your app menu with its icon. Run it again any time to reinstall. Wu keeps itself up to date after that.
+
+#### Manual install
+
 1. Download the tarball for your platform.
     - [**Linux x86-64**](https://github.com/dstrml/wu/releases/latest/download/wu-linux-x86_64.tar.gz)
     - [**Linux AArch64**](https://github.com/dstrml/wu/releases/latest/download/wu-linux-aarch64.tar.gz)
@@ -49,7 +59,7 @@ tar -xzf wu-linux-$(uname -m).tar.gz -C ~/.local
 ln -sf ~/.local/wu.app/bin/wu ~/.local/bin/wu
 ```
 
-Make sure `~/.local/bin` is on your `PATH`, then run `wu`.
+Make sure `~/.local/bin` is on your `PATH`, then run `wu`. This doesn't add Wu to your app menu; the install command above does.
 
 ### Windows (x86-64)
 

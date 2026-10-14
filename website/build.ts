@@ -14,6 +14,7 @@ const assets = await bundleAssets();
 await prerenderRoutes(assets);
 await writeSitemap();
 await cp(path.join(root, 'public'), outdir, { recursive: true });
+await cp(path.join(root, '..', 'script', 'install.sh'), path.join(outdir, 'install.sh'));
 
 async function bundleAssets(): Promise<Map<string, string>> {
   const result = await Bun.build({
