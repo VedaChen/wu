@@ -7,11 +7,11 @@ release body.
 
 ## Unreleased
 
-- Fixed Codex not being found when it only comes bundled with the ChatGPT desktop app.
-- Rename a chat from its tab: right-click it and pick Rename, or double-click it.
-- Tables in agent replies now have a copy button that copies the table as Markdown.
-- Fixed Claude Code chats that seemed stuck: Wu now shows when Claude is retrying its API, and answers questions from connected tools instead of waiting forever.
-- OpenCode chats now take the name OpenCode gives them instead of the start of your first message.
+- Fixed Codex bundled with the ChatGPT desktop app not found.
+- Chats can now be renamed from their tabs.
+- Tables in agent replies can be copied as markdown.
+- Fixed Claude Code chats that seemed stuck.
+- OpenCode chats now pick up the name OpenCode gives them.
 
 ## 1.1.6 - 2026-10-11
 
