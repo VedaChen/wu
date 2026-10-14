@@ -7,6 +7,7 @@ release body.
 
 ## Unreleased
 
+- Rename a chat from its tab: right-click it and pick Rename, or double-click it.
 - Tables in agent replies now have a copy button that copies the table as Markdown.
 - Fixed Claude Code chats that seemed stuck: Wu now shows when Claude is retrying its API, and answers questions from connected tools instead of waiting forever.
 - OpenCode chats now take the name OpenCode gives them instead of the start of your first message.

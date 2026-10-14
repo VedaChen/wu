@@ -48,6 +48,8 @@ actions!(
         DismissCommands,
         /// Starts or stops dictation in the chat box.
         ToggleDictation,
+        /// Renames the chat from its tab.
+        RenameChat,
     ]
 );
 

@@ -14,7 +14,7 @@ mod search;
 mod todo_panel;
 
 use crate::{
-    AgentChatSettings, Send, Stop,
+    AgentChatSettings, RenameChat, Send, Stop,
     chat_style::{
         Chip, accent, flavour_seed, flavour_word, format_elapsed, gradient_spinner, hairline, ink,
         mix, page, text_faint, ui, wash,
@@ -167,6 +167,8 @@ pub struct ChatView {
     container_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     painted_turns: Rc<std::cell::RefCell<HashMap<usize, Bounds<Pixels>>>>,
     this: WeakEntity<ChatView>,
+    rename_editor: Option<Entity<Editor>>,
+    _rename_subscription: Option<Subscription>,
     background_ticking: bool,
     _background_tick: Task<()>,
     search: search::SearchState,
@@ -331,6 +333,8 @@ impl ChatView {
             container_bounds: Default::default(),
             painted_turns: Default::default(),
             this: cx.entity().downgrade(),
+            rename_editor: None,
+            _rename_subscription: None,
             background_ticking: false,
             _background_tick: Task::ready(()),
             search: Default::default(),
@@ -522,6 +526,57 @@ impl ChatView {
                 })
                 .log_err();
         });
+    }
+
+    fn rename_chat(&mut self, _: &RenameChat, window: &mut Window, cx: &mut Context<Self>) {
+        if self.subagent.is_some() || self.rename_editor.is_some() {
+            return;
+        }
+        let title = self.title(cx);
+        let editor = cx.new(|cx| {
+            let mut editor = Editor::single_line(window, cx);
+            editor.set_text(title, window, cx);
+            editor.select_all(&Default::default(), window, cx);
+            editor
+        });
+        let subscription = cx.subscribe_in(&editor, window, {
+            let editor = editor.clone();
+            move |_, _, event: &EditorEvent, window, cx| {
+                if matches!(event, EditorEvent::Blurred) {
+                    // Opening from a double-click briefly moves focus, so wait for it to settle.
+                    let editor = editor.clone();
+                    cx.defer_in(window, move |this, window, cx| {
+                        let current = this.rename_editor.as_ref() == Some(&editor);
+                        if current && !editor.focus_handle(cx).is_focused(window) {
+                            this.finish_renaming(true, window, cx);
+                        }
+                    });
+                }
+            }
+        });
+        window.focus(&editor.focus_handle(cx), cx);
+        self.rename_editor = Some(editor);
+        self._rename_subscription = Some(subscription);
+        cx.emit(ItemEvent::UpdateTab);
+        cx.notify();
+    }
+
+    fn finish_renaming(&mut self, save: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = self.rename_editor.take() else {
+            return;
+        };
+        self._rename_subscription = None;
+        if save {
+            let text = editor.read(cx).text(cx);
+            let id = self.session.read(cx).metadata().id.clone();
+            self.store
+                .update(cx, |store, cx| store.rename_session(&id, text, cx));
+        }
+        if editor.focus_handle(cx).is_focused(window) {
+            window.focus(&self.composer.focus_handle(cx), cx);
+        }
+        cx.emit(ItemEvent::UpdateTab);
+        cx.notify();
     }
 
     fn title(&self, cx: &App) -> SharedString {
@@ -2924,6 +2979,7 @@ impl Render for ChatView {
             .on_action(cx.listener(Self::accept_command))
             .on_action(cx.listener(Self::dismiss_commands))
             .on_action(cx.listener(Self::toggle_dictation))
+            .on_action(cx.listener(Self::rename_chat))
             .on_key_up(cx.listener(|this, event: &gpui::KeyUpEvent, _, cx| {
                 this.dictation_key_up(event, cx)
             }));
@@ -2978,12 +3034,53 @@ impl Item for ChatView {
         let session = self.session.read(cx);
         let needs_input = self.subagent.is_none() && !session.pending_questions().is_empty();
         let is_working = self.is_working(cx);
+        let renaming = self.rename_editor.is_some();
+        let this = self.this.clone();
         h_flex()
             .gap_1()
+            // A background tab's chat isn't rendered, so the tab itself receives the rename.
+            .when(!params.selected, |this| {
+                this.track_focus(&self.composer.focus_handle(cx))
+            })
+            .on_action(move |action: &RenameChat, window, cx| {
+                this.update(cx, |this, cx| this.rename_chat(action, window, cx))
+                    .ok();
+            })
             .child(
-                Label::new(self.title(cx))
-                    .single_line()
-                    .color(params.text_color()),
+                div()
+                    .relative()
+                    .child(
+                        Label::new(self.title(cx))
+                            .single_line()
+                            .color(params.text_color())
+                            .when(renaming, |this| this.alpha(0.)),
+                    )
+                    .when_some(self.rename_editor.clone(), |this, editor| {
+                        let confirm = self.this.clone();
+                        let cancel = self.this.clone();
+                        this.child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .size_full()
+                                .child(editor)
+                                .on_action(move |_: &menu::Confirm, window, cx| {
+                                    confirm
+                                        .update(cx, |this, cx| {
+                                            this.finish_renaming(true, window, cx)
+                                        })
+                                        .ok();
+                                })
+                                .on_action(move |_: &menu::Cancel, window, cx| {
+                                    cancel
+                                        .update(cx, |this, cx| {
+                                            this.finish_renaming(false, window, cx)
+                                        })
+                                        .ok();
+                                }),
+                        )
+                    }),
             )
             .when(needs_input, |this| {
                 this.child(
@@ -3005,6 +3102,17 @@ impl Item for ChatView {
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
         self.title(cx)
+    }
+
+    fn tab_extra_context_menu_actions(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Vec<(SharedString, Box<dyn gpui::Action>)> {
+        if self.subagent.is_some() {
+            return Vec::new();
+        }
+        vec![("Rename".into(), Box::new(RenameChat))]
     }
 
     fn tab_icon(&self, _: &Window, cx: &App) -> Option<Icon> {
@@ -3262,6 +3370,84 @@ mod tests {
             }
             assert!(lost.is_empty(), "pane lost focus ({name} focused) at steps {lost:?}");
         }
+    }
+
+    #[gpui::test]
+    async fn chats_rename_from_their_tab_whether_or_not_it_is_active(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let project = project::Project::test(FakeFs::new(cx.executor()), [], cx).await;
+        let (multi_workspace, cx) = cx.add_window_view(|window, cx| {
+            workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+        });
+        let workspace = multi_workspace.read_with(cx, |multi, _| multi.workspace().clone());
+        let open_chat = |cx: &mut VisualTestContext| {
+            let session = store.update(cx, |store, cx| {
+                store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+            });
+            session.update(cx, |session, cx| {
+                session.update_metadata(|metadata| metadata.title = "Old name".into(), cx)
+            });
+            workspace.update_in(cx, |workspace, window, cx| {
+                let weak = cx.entity().downgrade();
+                let chat = cx.new(|cx| {
+                    ChatView::new(
+                        session.clone(),
+                        store.clone(),
+                        project.clone(),
+                        weak,
+                        window,
+                        cx,
+                    )
+                });
+                workspace.add_item_to_active_pane(Box::new(chat.clone()), None, true, window, cx);
+                chat
+            })
+        };
+        let background = open_chat(cx);
+        let active = open_chat(cx);
+        let draw = |cx: &mut VisualTestContext| {
+            cx.run_until_parked();
+            cx.update(|window, cx| {
+                let _ = window.draw(cx);
+            });
+        };
+        let rename = |chat: &Entity<ChatView>,
+                      text: &str,
+                      finish: &dyn gpui::Action,
+                      cx: &mut VisualTestContext| {
+            draw(cx);
+            cx.update(|window, cx| {
+                let target = chat.read(cx).composer.focus_handle(cx);
+                target.dispatch_action(&RenameChat, window, cx);
+            });
+            draw(cx);
+            let editor = chat
+                .read_with(cx, |chat, _| chat.rename_editor.clone())
+                .expect("the tab should be renaming");
+            cx.update(|window, cx| {
+                editor.update(cx, |editor, cx| editor.set_text(text, window, cx));
+                editor.focus_handle(cx).dispatch_action(finish, window, cx);
+            });
+            draw(cx);
+            assert!(chat.read_with(cx, |chat, _| chat.rename_editor.is_none()));
+        };
+        let title = |chat: &Entity<ChatView>, cx: &mut VisualTestContext| {
+            chat.read_with(cx, |chat, cx| chat.title(cx))
+        };
+
+        rename(&active, "Release notes", &menu::Confirm, cx);
+        assert_eq!(title(&active, cx), "Release notes");
+
+        rename(&background, "Ignored", &menu::Cancel, cx);
+        assert_eq!(title(&background, cx), "Old name");
+        rename(&background, "Background chat", &menu::Confirm, cx);
+        assert_eq!(title(&background, cx), "Background chat");
     }
 
     #[gpui::test]

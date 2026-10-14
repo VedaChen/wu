@@ -555,6 +555,8 @@ impl ChatView {
 
     pub(super) fn render_scroll_button(&self, cx: &Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors();
+        let hover_background = colors.elevated_surface_background.blend(ink(0.08, cx));
+        let hover_border = colors.border.blend(ink(0.12, cx));
         h_flex()
             .absolute()
             .bottom(px(6.))
@@ -575,7 +577,7 @@ impl ChatView {
                     .shadow_md()
                     .cursor_pointer()
                     .text_size(ui(13.))
-                    .hover(|style| style.bg(colors.element_hover))
+                    .hover(move |style| style.bg(hover_background).border_color(hover_border))
                     .child(div().text_color(colors.text_muted).child("↓"))
                     .child(div().text_color(colors.text).child("Scroll to bottom"))
                     .on_click(cx.listener(|this, _, _, cx| {

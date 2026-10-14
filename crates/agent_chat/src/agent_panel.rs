@@ -555,7 +555,7 @@ impl AgentPanel {
         let colors = cx.theme().colors();
         let text = colors.text;
         let hover = colors.element_hover;
-        let muted = colors.text_muted.opacity(0.55);
+        let muted = colors.text_muted.opacity(0.75);
         let new_chat_row = |kind: AgentKind| {
             let workspace = self.workspace.clone();
             let group = SharedString::from(format!("agent-panel-empty-{}", kind.label()));
@@ -1584,7 +1584,7 @@ impl RenderOnce for HeaderButton {
             .when_some(self.on_click, |this, on_click| {
                 this.on_click(move |event, window, cx| on_click(event, window, cx))
             })
-            .child(glyph(self.icon, 16., colors.text_muted.opacity(0.6)))
+            .child(glyph(self.icon, 16., colors.text_muted.opacity(0.8)))
     }
 }
 
