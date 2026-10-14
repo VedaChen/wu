@@ -439,6 +439,11 @@ pub enum CodeBlockRenderer {
 
 pub type CodeBlockHideFn = Arc<dyn Fn(&CodeBlockKind, &str, &App) -> bool>;
 
+/// Builds controls pinned to a table's top-right corner from its markdown source.
+pub type TableActionsFn = Arc<dyn Fn(&str, Range<usize>, &mut Window, &App) -> AnyElement>;
+
+pub const TABLE_GROUP: &str = "markdown-table";
+
 pub type CodeBlockRenderFn = Arc<
     dyn Fn(
         &CodeBlockKind,
@@ -1310,6 +1315,7 @@ pub struct MarkdownElement {
     markdown: Entity<Markdown>,
     style: MarkdownStyle,
     code_block_renderer: CodeBlockRenderer,
+    table_actions: Option<TableActionsFn>,
     on_url_click: Option<Rc<dyn Fn(SharedString, &mut Window, &mut App)>>,
     on_url_hover: Option<UrlHoverCallback>,
     code_span_link: Option<CodeSpanLinkCallback>,
@@ -1330,6 +1336,7 @@ impl MarkdownElement {
                 wrap_button_visibility: WrapButtonVisibility::Hidden,
                 border: false,
             },
+            table_actions: None,
             on_url_click: None,
             on_url_hover: None,
             code_span_link: None,
@@ -1364,6 +1371,11 @@ impl MarkdownElement {
 
     pub fn code_block_renderer(mut self, variant: CodeBlockRenderer) -> Self {
         self.code_block_renderer = variant;
+        self
+    }
+
+    pub fn table_actions(mut self, actions: TableActionsFn) -> Self {
+        self.table_actions = Some(actions);
         self
     }
 
@@ -2537,10 +2549,17 @@ impl Element for MarkdownElement {
                             }
                         }
                         MarkdownTag::Table(alignments) => {
-                            builder.table.start(alignments.clone());
+                            builder.table.start(alignments.clone(), range.clone());
 
                             let column_count = alignments.len();
                             builder.push_div(div().flex(), range, markdown_end);
+                            if self.table_actions.is_some() {
+                                builder.push_div(
+                                    div().flex().relative().min_w_0().group(TABLE_GROUP),
+                                    range,
+                                    markdown_end,
+                                );
+                            }
                             builder.push_div(
                                 div()
                                     .id(("table", range.start))
@@ -2742,6 +2761,13 @@ impl Element for MarkdownElement {
                     }
                     MarkdownTagEnd::Table => {
                         builder.pop_div();
+                        if let Some(actions) = &self.table_actions {
+                            let range = builder.table.range.clone();
+                            let source = table_markdown(&parsed_markdown.source, range.clone());
+                            let element = actions(&source, range, window, cx);
+                            builder.modify_current_div(|el| el.child(element));
+                            builder.pop_div();
+                        }
                         builder.pop_div();
                         builder.table.end();
                     }
@@ -3136,14 +3162,37 @@ impl ParentElement for AnyDiv {
 #[derive(Default)]
 struct TableState {
     alignments: Vec<Alignment>,
+    range: Range<usize>,
     in_head: bool,
     row_index: usize,
     col_index: usize,
 }
 
+/// A table's source without the indentation or quote markers of the block that holds it.
+fn table_markdown(source: &str, range: Range<usize>) -> String {
+    let Some(table) = source.get(range.clone()) else {
+        return String::new();
+    };
+    let line_start = source[..range.start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    let quoted = source[line_start..range.start].contains('>');
+    table
+        .trim_end()
+        .lines()
+        .map(|line| {
+            line.trim_start_matches(|character: char| {
+                character.is_whitespace() || (quoted && character == '>')
+            })
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 impl TableState {
-    fn start(&mut self, alignments: Vec<Alignment>) {
+    fn start(&mut self, alignments: Vec<Alignment>, range: Range<usize>) {
         self.alignments = alignments;
+        self.range = range;
         self.in_head = false;
         self.row_index = 0;
         self.col_index = 0;
@@ -5485,10 +5534,81 @@ mod tests {
         );
     }
 
+    #[gpui::test]
+    fn test_table_actions_get_the_table_source_and_keep_its_layout(cx: &mut TestAppContext) {
+        ensure_theme_initialized(cx);
+
+        struct TableView {
+            markdown: Entity<Markdown>,
+            sources: Arc<std::sync::Mutex<Vec<String>>>,
+        }
+
+        impl Render for TableView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let sources = self.sources.clone();
+                div().size_full().child(
+                    MarkdownElement::new(self.markdown.clone(), MarkdownStyle::default())
+                        .table_actions(Arc::new(move |table, _, _, _| {
+                            sources.lock().unwrap().push(table.to_string());
+                            div().absolute().into_any_element()
+                        })),
+                )
+            }
+        }
+
+        let source = format!("Intro\n\n{REVIEW_TABLE}\nOutro");
+        let sources = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let table_width = |width: f32, cx: &mut TestAppContext| {
+            let window = cx.open_window(size(px(width), px(600.)), |_, cx| {
+                let markdown = cx.new(|cx| Markdown::new(source.clone().into(), None, None, cx));
+                TableView {
+                    markdown,
+                    sources: sources.clone(),
+                }
+            });
+            cx.run_until_parked();
+            gpui::VisualTestContext::from_window(window.into(), cx)
+                .debug_bounds("markdown_table")
+                .expect("table should have been rendered")
+                .size
+                .width
+        };
+
+        assert!(table_width(800., cx) < px(800.));
+        assert_eq!(table_width(400., cx), px(400.));
+        assert_eq!(
+            sources.lock().unwrap().last().map(String::as_str),
+            Some(REVIEW_TABLE.trim_end())
+        );
+    }
+
+    #[test]
+    fn test_table_markdown_drops_the_enclosing_block_markers() {
+        let plain = "| a | b |\n|---|---|\n| 1 | 2 |\n";
+        assert_eq!(table_markdown(plain, 0..plain.len()), plain.trim_end());
+
+        let listed = "- item\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n";
+        let start = listed.find('|').unwrap();
+        assert_eq!(
+            table_markdown(listed, start..listed.len()),
+            "| a | b |\n|---|---|\n| 1 | 2 |"
+        );
+
+        let quoted = "> | a | b |\n> |---|---|\n> | 1 | 2 |\n";
+        let start = quoted.find('|').unwrap();
+        assert_eq!(
+            table_markdown(quoted, start..quoted.len()),
+            "| a | b |\n|---|---|\n| 1 | 2 |"
+        );
+    }
+
     #[test]
     fn test_table_state_current_cell_alignment_centers_headers() {
         let mut table = TableState::default();
-        table.start(vec![Alignment::Left, Alignment::Right, Alignment::None]);
+        table.start(
+            vec![Alignment::Left, Alignment::Right, Alignment::None],
+            0..0,
+        );
 
         table.start_head();
         for _ in 0..3 {

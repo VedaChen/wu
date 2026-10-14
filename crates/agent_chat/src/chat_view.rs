@@ -40,7 +40,7 @@ use gpui::{
 };
 use markdown::{
     CodeBlockRenderer, HeadingLevelStyles, Markdown, MarkdownElement, MarkdownFont, MarkdownStyle,
-    parser::CodeBlockKind,
+    TABLE_GROUP, TableActionsFn, parser::CodeBlockKind,
 };
 use project::Project;
 use gpui::{FollowMode, ListAlignment, ListState, list};
@@ -778,6 +778,58 @@ impl ChatView {
         style
     }
 
+    fn table_actions(&self, message_key: usize, cx: &Context<Self>) -> TableActionsFn {
+        let view: WeakEntity<Self> = cx.entity().downgrade();
+        let copied = self.copied.clone();
+        Arc::new(move |table, range, _, cx| {
+            let key: SharedString = format!("table-{message_key}-{}", range.start).into();
+            let is_copied = copied.as_ref() == Some(&key);
+            let muted = cx.theme().colors().text_muted;
+            let table = table.to_string();
+            let view = view.clone();
+            h_flex()
+                .id(ElementId::Name(key.clone()))
+                .absolute()
+                .top(px(4.))
+                .right(px(4.))
+                .h(px(CODE_ACTION_SIZE))
+                .px(px(6.))
+                .gap(px(4.))
+                .rounded(px(5.))
+                .cursor_pointer()
+                .text_size(px(10.5))
+                .text_color(muted)
+                .bg(cx.theme().colors().editor_background)
+                .border_1()
+                .border_color(cx.theme().colors().border)
+                .when(!is_copied, |this| {
+                    this.invisible()
+                        .group_hover(TABLE_GROUP, |style| style.visible())
+                })
+                .hover(|style| style.bg(ink(0.08, cx)))
+                .tooltip(Tooltip::text("Copy table as Markdown"))
+                .child(
+                    icon(
+                        if is_copied {
+                            IconName::AgentCheck
+                        } else {
+                            IconName::AgentCopy
+                        },
+                        12.,
+                    )
+                    .text_color(muted),
+                )
+                .when(is_copied, |this| this.child("Copied"))
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    let key = key.clone();
+                    let table = table.clone();
+                    view.update(cx, |this, cx| this.copy(key, table, cx)).ok();
+                })
+                .into_any_element()
+        })
+    }
+
     fn code_block_renderer(&self, message_key: usize, cx: &Context<Self>) -> CodeBlockRenderer {
         let view: WeakEntity<Self> = cx.entity().downgrade();
         let view_for_hide = view.clone();
@@ -1486,6 +1538,7 @@ impl ChatView {
                             .child(
                                 MarkdownElement::new(markdown.clone(), message_style.clone())
                                     .code_block_renderer(self.code_block_renderer(index, cx))
+                                    .table_actions(self.table_actions(index, cx))
                                     .on_url_click(move |url, window, cx| {
                                         link_view
                                             .update(cx, |this, cx| this.open_link(url, window, cx))
