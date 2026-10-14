@@ -110,7 +110,7 @@ pub(crate) fn binary_hint(path: &Path) -> String {
     )
 }
 
-fn runnable(path: &Path) -> bool {
+pub(crate) fn runnable(path: &Path) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

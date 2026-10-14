@@ -7,6 +7,7 @@ release body.
 
 ## Unreleased
 
+- Fixed Codex not being found when it only comes bundled with the ChatGPT desktop app.
 - Rename a chat from its tab: right-click it and pick Rename, or double-click it.
 - Tables in agent replies now have a copy button that copies the table as Markdown.
 - Fixed Claude Code chats that seemed stuck: Wu now shows when Claude is retrying its API, and answers questions from connected tools instead of waiting forever.

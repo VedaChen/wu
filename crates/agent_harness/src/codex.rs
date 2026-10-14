@@ -41,7 +41,25 @@ pub fn resolve_codex_executable() -> Option<PathBuf> {
     }
     extra.push(PathBuf::from("/opt/homebrew/bin/codex"));
     extra.push(PathBuf::from("/usr/local/bin/codex"));
-    crate::executable::find_on_paths("codex", extra)
+    crate::executable::find_on_paths("codex", extra).or_else(|| {
+        chatgpt_app_codex_paths(crate::executable::home_dir())
+            .into_iter()
+            .find(|path| crate::executable::runnable(path))
+    })
+}
+
+/// The ChatGPT desktop app bundles its own Codex, used only when no standalone install exists.
+fn chatgpt_app_codex_paths(home: Option<PathBuf>) -> Vec<PathBuf> {
+    if cfg!(target_os = "macos") {
+        let bundled = std::path::Path::new("Applications/ChatGPT.app/Contents/Resources/codex");
+        let mut paths = vec![std::path::Path::new("/").join(bundled)];
+        paths.extend(home.map(|home| home.join(bundled)));
+        paths
+    } else if cfg!(target_os = "linux") {
+        vec![PathBuf::from("/usr/lib/chatgpt/resources/codex")]
+    } else {
+        Vec::new()
+    }
 }
 
 pub struct CodexHarness {
@@ -95,8 +113,8 @@ impl CodexHarness {
                 "codex (searched PATH, ~/.local/bin, \
                  ~/.codex/bin, ~/.npm-global/bin, /opt/homebrew/bin, /usr/local/bin, \
                  and fnm/nvm/volta/pnpm/bun install dirs; Windows also checks USERPROFILE \
-                 and explicit NVM_SYMLINK/VOLTA_HOME/PNPM_HOME; set CODEX_EXECUTABLE \
-                 to override)"
+                 and explicit NVM_SYMLINK/VOLTA_HOME/PNPM_HOME, then the ChatGPT desktop \
+                 app's bundled copy; set CODEX_EXECUTABLE to override)"
                     .into(),
             )
         })
@@ -1872,6 +1890,24 @@ use crate::shutdown_child;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chatgpt_app_bundles_are_searched_on_mac_and_linux() {
+        let paths = chatgpt_app_codex_paths(Some(PathBuf::from("/home/me")));
+        if cfg!(target_os = "macos") {
+            assert_eq!(
+                paths,
+                [
+                    PathBuf::from("/Applications/ChatGPT.app/Contents/Resources/codex"),
+                    PathBuf::from("/home/me/Applications/ChatGPT.app/Contents/Resources/codex"),
+                ]
+            );
+        } else if cfg!(target_os = "linux") {
+            assert_eq!(paths, [PathBuf::from("/usr/lib/chatgpt/resources/codex")]);
+        } else {
+            assert!(paths.is_empty());
+        }
+    }
 
     #[test]
     fn computer_use_app_approval_offers_allow_remember_and_deny() {
