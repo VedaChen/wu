@@ -1,6 +1,6 @@
 import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
-import { INSTALL_GUIDE_URL, RAYCAST_URL, ZED_DOCS_URL } from '../consts';
+import { INSTALL_COMMAND, INSTALL_GUIDE_URL, RAYCAST_URL, ZED_DOCS_URL } from '../consts';
 
 const paths = [
   { label: 'Command line', path: 'wu' },
@@ -28,7 +28,8 @@ export function Docs() {
 
         <h2>Getting started</h2>
         <p>
-          Download Wu for your platform and follow the{' '}
+          On macOS and Linux, run <code>{INSTALL_COMMAND}</code> in your terminal. Or download Wu for your platform and
+          follow the{' '}
           <a href={INSTALL_GUIDE_URL} target="_blank" rel="noopener">
             install guide
           </a>

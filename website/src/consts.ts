@@ -1,4 +1,5 @@
 export const SITE_URL = 'https://wu.dstrml.org';
+export const INSTALL_COMMAND = `curl -fsSL ${SITE_URL}/install.sh | sh`;
 export const SITE_TITLE = 'Wu';
 export const SITE_DESCRIPTION =
   'Wu is the fast, native code editor, written in Rust. Batteries included, with coding agents built in. No account, no telemetry.';

@@ -5,6 +5,7 @@ import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
 import { AppIcon, GithubIcon } from '../components/icons';
 import { HeroBackground } from '../components/HeroBackground';
+import { InstallCommand } from '../components/InstallCommand';
 import { MemoryChart } from '../components/MemoryChart';
 import { RaycastWindow } from '../components/RaycastWindow';
 import { CenterSection, MediaSection, frameOutline, mediaFrame, sectionBody, sectionTitle } from '../components/Section';
@@ -33,10 +34,25 @@ export function Home() {
 
   const direct = directDownload(platform, macArchitecture);
   const downloadHref = direct?.href ?? '#download';
+  const hasInstallScript = platform === 'mac' || platform === 'linux';
+
+  const downloadButtons = (highlightSuggested: boolean) => (
+    <div className="mt-2 flex flex-wrap justify-center gap-2">
+      {downloads.map((download) => (
+        <a
+          key={download.label}
+          className={`btn btn-md ${highlightSuggested && isSuggested(download, platform, macArchitecture) ? 'btn-light' : 'btn-soft'}`}
+          href={download.href}
+        >
+          {download.label}
+        </a>
+      ))}
+    </div>
+  );
 
   return (
     <>
-      <Header downloadHref={downloadHref} />
+      <Header downloadHref={hasInstallScript ? '#download' : downloadHref} />
       <main>
         <div className="relative isolate m-1 mb-40 overflow-hidden rounded-xl max-sm:mb-18">
           <div
@@ -55,15 +71,24 @@ export function Home() {
                 Written in Rust. Batteries included: coding agents, a delightful UX and everything you need from day
                 one.
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <a className="btn btn-lg btn-light" href={downloadHref}>
-                  <Download size={18} aria-hidden="true" />
-                  {direct && platform ? `Download for ${platformNames[platform]}` : 'Download Wu'}
-                </a>
-                <a className="btn btn-lg btn-primary" href="#download">
-                  All platforms
-                </a>
-              </div>
+              {hasInstallScript ? (
+                <div className="mt-2 flex max-w-full flex-col items-start gap-3">
+                  <InstallCommand />
+                  <p className="pl-[18px] text-sm text-tertiary">
+                    Or <a href={downloadHref}>download the app</a>
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a className="btn btn-lg btn-light" href={downloadHref}>
+                    <Download size={18} aria-hidden="true" />
+                    {direct && platform ? `Download for ${platformNames[platform]}` : 'Download Wu'}
+                  </a>
+                  <a className="btn btn-lg btn-primary" href="#download">
+                    All platforms
+                  </a>
+                </div>
+              )}
             </div>
           </section>
 
@@ -125,18 +150,27 @@ export function Home() {
         <CenterSection id="download" card>
           <AppIcon className="mb-2 size-24 rounded-[24%]" alt="Wu app icon" />
           <h2 className={sectionTitle}>Ready when you are</h2>
-          <p className={`${sectionBody} max-w-[520px]`}>Wu is free and takes a minute to install. Pick your platform.</p>
-          <div className="mt-2 flex flex-wrap justify-center gap-2">
-            {downloads.map((download) => (
-              <a
-                key={download.label}
-                className={`btn btn-md ${isSuggested(download, platform, macArchitecture) ? 'btn-light' : 'btn-soft'}`}
-                href={download.href}
-              >
-                {download.label}
-              </a>
-            ))}
-          </div>
+          <p className={`${sectionBody} max-w-[520px]`}>
+            Wu is free and takes a minute to install.{' '}
+            {hasInstallScript ? 'Run this in your terminal.' : 'Pick your platform.'}
+          </p>
+          {hasInstallScript ? (
+            <>
+              <InstallCommand className="mt-2" />
+              <p className="mt-6 text-sm text-tertiary">Or download the app</p>
+              {downloadButtons(false)}
+            </>
+          ) : (
+            <>
+              {downloadButtons(true)}
+              {platform !== 'windows' && (
+                <>
+                  <p className="mt-6 text-sm text-tertiary">On macOS or Linux, you can also run</p>
+                  <InstallCommand className="mt-2" />
+                </>
+              )}
+            </>
+          )}
           <p className="mt-2 text-sm leading-[1.4] text-tertiary">
             First time on macOS or Linux? See the{' '}
             <a href={INSTALL_GUIDE_URL} target="_blank" rel="noopener">
