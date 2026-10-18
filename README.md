@@ -29,7 +29,7 @@ curl -fsSL https://wu.dstrml.org/install.sh | sh
 On Windows, download the [installer](https://github.com/dstrml/wu/releases/latest/download/Wu-x86_64.exe).
 
 <details>
-<summary>Download the app instead</summary>
+<summary>Or install manually</summary>
 
 - [macOS (Apple Silicon)](https://github.com/dstrml/wu/releases/latest/download/Wu-aarch64.dmg)
 - [macOS (Intel)](https://github.com/dstrml/wu/releases/latest/download/Wu-x86_64.dmg)

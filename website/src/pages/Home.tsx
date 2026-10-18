@@ -75,7 +75,7 @@ export function Home() {
                 <div className="mt-2 flex max-w-full flex-col items-start gap-3">
                   <InstallCommand />
                   <p className="pl-[18px] text-sm text-tertiary">
-                    Or <a href={downloadHref}>download the app</a>
+                    Or <a href={downloadHref}>install manually</a>
                   </p>
                 </div>
               ) : (
@@ -157,7 +157,7 @@ export function Home() {
           {hasInstallScript ? (
             <>
               <InstallCommand className="mt-2" />
-              <p className="mt-6 text-sm text-tertiary">Or download the app</p>
+              <p className="mt-6 text-sm text-tertiary">Or install manually</p>
               {downloadButtons(false)}
             </>
           ) : (
