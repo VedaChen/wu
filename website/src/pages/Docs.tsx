@@ -50,69 +50,39 @@ export function Docs() {
           </table>
         </div>
 
-        <h2>Agent Chat</h2>
+        <h2 id="agent-chat">Agent Chat</h2>
         <p>
-          Agent Chat lets you work with Claude Code, Codex or OpenCode inside Wu. It runs the <code>claude</code>,{' '}
-          <code>codex</code> and <code>opencode</code> command line tools you already have installed and signed in, so
-          there are no API keys and no Wu account.
+          Chat with Claude Code, Codex or OpenCode inside Wu. It uses the command line tools you already have installed
+          and signed in, so there are no API keys and no Wu account.
         </p>
         <ul>
-          <li>Open it from the agent icon in the activity bar, then start a new Claude, Codex or OpenCode chat.</li>
           <li>
-            Type <code>/</code> for the agent's commands, <code>@</code> to mention a file, and <code>$</code> to use a
-            skill.
-          </li>
-          <li>Paste, drop, or attach images to send them with a message.</li>
-          <li>
-            Messages you send while the agent is working wait in a queue. You can edit them, steer the current turn, or
-            send one right away.
-          </li>
-          <li>Subagents open in their own tabs, and the agent's to-do list shows above the chat box.</li>
-          <li>
-            The model picker sets the model, reasoning level, fast mode, and how much the agent can do without asking.
-            The rings next to it show how full the context is and, for Claude Code and Codex, your plan usage, where you
-            can also switch accounts.
-          </li>
-          <li>Chats can be pinned or forked.</li>
-          <li>
-            Continue Saved Chat in the new chat menu picks up a chat you started in Claude Code, Codex, or OpenCode for
-            the current project. Wu copies it into a new chat, so the original stays as it was.
+            <strong>Start a chat</strong> from the agent icon in the activity bar. Continue Saved Chat picks up one you
+            started in the terminal.
           </li>
           <li>
-            Press <code>Cmd-D</code> (<code>Ctrl-D</code> on Windows and Linux) in the chat box to dictate. The speech
-            model runs on your machine and downloads the first time you use it. Dictation works on macOS 14 or later
-            with Apple Silicon, Linux, and Windows.
+            <strong>Type</strong> <code>/</code> for commands, <code>@</code> to mention a file and <code>$</code> for a
+            skill. Paste or drop images to attach them.
           </li>
           <li>
-            Wu can play a sound and show a notification when the agent finishes, needs your input, or hits an error.
-            Notifications are off by default. On macOS, turning them on asks to allow Wu's notifications, and opens
-            System Settings if they're turned off there.
+            <strong>Send while it works</strong> and your message waits in a queue. You can edit it or use it to steer
+            the current turn.
           </li>
           <li>
-            New chats start with the effort you used last with that agent and in Auto permission mode. In settings you
-            can pick a fixed effort, and a starting permission mode for each agent.
+            <strong>Dictate</strong> with <code>Cmd-D</code> (<code>Ctrl-D</code> on Windows and Linux). It runs on your
+            machine and needs macOS 14 or later with Apple Silicon, Linux or Windows.
           </li>
           <li>
-            By default, a message you send while the agent is working waits in a queue until it finishes. Set While
-            Working to Steer to send it right away instead.
-          </li>
-          <li>Wu asks before quitting or restarting while an agent is working, since that stops it.</li>
-          <li>
-            Turn off Enable Agent Chat in settings to hide the agent panel, its commands, and everything else
-            agent-related. Running agents stop, and your saved chats come back when you turn it on again.
+            <strong>The model picker</strong> sets the model, effort and permissions. The rings next to it show context
+            and plan usage.
           </li>
           <li>
-            Claude Code chats can use your Chrome browser through the Claude in Chrome extension, like Claude Code in
-            the terminal. Turn off Claude in Chrome in settings to keep them out of your browser.
-          </li>
-          <li>You can hide agents you don't use from the new chat menu and Continue Saved Chat. At least one stays shown.</li>
-          <li>
-            Auto-Compact compacts a Claude Code or Codex chat once its context reaches the limit you pick, from 100K to
-            1M tokens. When it's off, each agent compacts on its own when the context is nearly full.
+            <strong>Chats</strong> can be pinned, forked and renamed. Subagents open in their own tabs.
           </li>
         </ul>
         <p>
-          The send key, new chat defaults, auto-compact, sounds, notifications, dictation, and more are on the Agent Chat page in settings.
+          Notifications, auto-compact, Claude in Chrome, hiding agents and turning Agent Chat off are on the Agent Chat
+          page in settings.
         </p>
 
         <h2>Workspace</h2>

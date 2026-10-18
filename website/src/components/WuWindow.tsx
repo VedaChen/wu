@@ -31,11 +31,11 @@ const CHAR_WIDTH = 9;
 const GUTTER_ICON_AREA = 26;
 const GUTTER_FOLD_AREA = 26;
 
-const text = '#e8e8ea';
-const muted = '#a9a9ae';
-const placeholder = '#85858a';
-const accent = '#8b7cf6';
-const claude = '#d97757';
+export const text = '#e8e8ea';
+export const muted = '#a9a9ae';
+export const placeholder = '#85858a';
+export const accent = '#8b7cf6';
+export const claude = '#d97757';
 
 const tokenStyles: Record<TokenKind, CSSProperties> = {
   keyword: { color: '#8b7cf6' },
@@ -75,9 +75,9 @@ const toolIcons: Record<ToolKind, string> = {
 const toolLabels: Record<ToolKind, string> = { run: 'Run', read: 'Read', edit: 'Edit', search: 'Search' };
 
 const changedFiles = files.filter((file) => file.modified);
-const hover = 'hover:bg-[#ffffff1c]';
+export const hover = 'hover:bg-[#ffffff1c]';
 
-function Icon({ name, size = 16, color, className = '' }: { name: string; size?: number; color?: string; className?: string }) {
+export function Icon({ name, size = 16, color, className = '' }: { name: string; size?: number; color?: string; className?: string }) {
   const mask = `url(/wu-ui/${name}.svg) center / contain no-repeat`;
   return (
     <span
@@ -168,7 +168,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   );
 }
 
-function AssistantText({ source }: { source: string }) {
+export function AssistantText({ source }: { source: string }) {
   const blocks = source.split(/\n?```(\w*)\n([\s\S]*?)\n```\n?/);
   const elements: ReactNode[] = [];
   for (let index = 0; index < blocks.length; index += 3) {
@@ -315,7 +315,7 @@ function TreeGutter({ isLast }: { isLast: boolean }) {
   );
 }
 
-function StepRow({
+export function StepRow({
   step,
   isLast,
   expanded,
@@ -370,7 +370,7 @@ function StepRow({
   );
 }
 
-function stepsSummary(steps: ChatStep[]) {
+export function stepsSummary(steps: ChatStep[]) {
   const thoughts = steps.filter((step) => step.kind === 'thought').length;
   const tools = steps.flatMap((step) => (step.kind === 'tool' ? [step] : []));
   const count = (tool: ToolKind) => tools.filter((step) => step.tool === tool).length;
@@ -404,7 +404,7 @@ function HoverStrip({ time, alignEnd }: { time?: string; alignEnd: boolean }) {
   );
 }
 
-function UsageRing({ percent, color }: { percent: number; color: string }) {
+export function UsageRing({ percent, color }: { percent: number; color: string }) {
   const radius = 6.1;
   const circumference = 2 * Math.PI * radius;
   return (

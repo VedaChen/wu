@@ -1,16 +1,16 @@
 import { ArrowUpRight, BookOpen, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Faq } from '../components/Faq';
+import { AgentWindow } from '../components/AgentWindow';
 import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
 import { AppIcon, GithubIcon } from '../components/icons';
 import { HeroBackground } from '../components/HeroBackground';
 import { InstallCommand } from '../components/InstallCommand';
 import { MemoryChart } from '../components/MemoryChart';
-import { RaycastWindow } from '../components/RaycastWindow';
 import { CenterSection, MediaSection, frameOutline, mediaFrame, sectionBody, sectionTitle } from '../components/Section';
 import { WuWindowFrame } from '../components/WuWindow';
-import { INSTALL_GUIDE_URL, MEMORY_BENCHMARK_URL, RAYCAST_URL, RELEASES_URL, REPO_URL } from '../consts';
+import { INSTALL_GUIDE_URL, MEMORY_BENCHMARK_URL, RELEASES_URL, REPO_URL } from '../consts';
 import {
   detectMacArchitecture,
   detectPlatform,
@@ -115,18 +115,16 @@ export function Home() {
         <MediaSection
           text={
             <>
-              <h2 className={sectionTitle}>Wu, from Raycast</h2>
+              <h2 className={sectionTitle}>Your coding agents, built in</h2>
               <p className={sectionBody}>
-                On macOS, the Wu extension for Raycast opens recent projects, new windows, your settings and more,
-                without reaching for the mouse.
+                Work with Claude Code, Codex and OpenCode right next to your code, using the existing accounts you're signed in from.
               </p>
-              <a className="btn btn-md btn-soft mt-2" href={RAYCAST_URL} target="_blank" rel="noopener">
-                Get the extension
-                <ArrowUpRight size={18} aria-hidden="true" />
+              <a className="btn btn-md btn-soft mt-2" href="/docs/#agent-chat">
+                How it works
               </a>
             </>
           }
-          media={<RaycastWindow />}
+          media={<AgentWindow />}
         />
 
         <CenterSection>
@@ -147,7 +145,7 @@ export function Home() {
           </div>
         </CenterSection>
 
-        <CenterSection id="download" card>
+        <CenterSection id="download">
           <AppIcon className="mb-2 size-24 rounded-[24%]" alt="Wu app icon" />
           <h2 className={sectionTitle}>Ready when you are</h2>
           <p className={`${sectionBody} max-w-[520px]`}>

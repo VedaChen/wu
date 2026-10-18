@@ -1,0 +1,214 @@
+import { useEffect, useRef, useState } from 'react';
+import { mediaFrame } from './Section';
+import { AssistantText, Icon, StepRow, UsageRing, accent, claude, muted, placeholder, stepsSummary, text } from './WuWindow';
+import type { ChatStep } from './wuWindowData';
+
+const WIDTH = 760;
+const HEIGHT = 475;
+const TICK = 100;
+
+const message = 'Retry uploads that fail because of a network error';
+const chatTitle = 'Retry uploads on network errors';
+
+const steps: ChatStep[] = [
+  {
+    kind: 'thought',
+    text: 'Uploads go through `UploadClient::send`. Only network errors are worth retrying, so the retry should check the error kind first.'
+  },
+  { kind: 'tool', tool: 'search', detail: 'fn send in src/upload' },
+  { kind: 'tool', tool: 'read', detail: 'src/upload/client.rs' },
+  { kind: 'tool', tool: 'edit', detail: 'src/upload/client.rs', added: 31, removed: 4 },
+  { kind: 'tool', tool: 'run', detail: 'cargo test -p upload' }
+];
+
+const reply =
+  "Uploads now retry up to 3 times when the network drops, waiting a little longer before each try. Other errors, like a rejected file, still fail right away since retrying won't help.\n\nAdded a test for each case, and all 26 tests in `upload` pass.";
+
+const TYPE_START = 600;
+const TYPE_SPEED = 32;
+const SENT_AT = TYPE_START + message.length * TYPE_SPEED + 500;
+const STEP_TIMES = [900, 2100, 2900, 3900, 5100].map((delay) => SENT_AT + delay);
+const REPLY_AT = SENT_AT + 7000;
+const LOOP_END = REPLY_AT + 7000;
+
+const spinnerTints = ['#b6d3ef', '#edb185', '#f888a0'];
+
+function WorkingSpinner() {
+  return (
+    <span className="flex flex-col gap-[1.25px]">
+      {spinnerTints.map((tint, row) => (
+        <span key={tint} className="flex gap-[1.25px]">
+          {[0, 1, 2].map((column) => {
+            const phase = (2 - row + Math.abs(column - 1)) / 4;
+            return (
+              <span
+                key={column}
+                className="size-[2.5px] animate-gspin rounded-full motion-reduce:animate-none"
+                style={{ background: tint, animationDelay: `${(phase - 1) * 750}ms` }}
+              />
+            );
+          })}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function useLoopTime() {
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [time, setTime] = useState(LOOP_END - TICK);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setTime(0);
+    const observer = new IntersectionObserver(([entry]) => setVisible(Boolean(entry?.isIntersecting)), { threshold: 0.4 });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const interval = setInterval(() => setTime((current) => (current + TICK) % LOOP_END), TICK);
+    return () => clearInterval(interval);
+  }, [visible]);
+
+  return { frameRef, time };
+}
+
+function Chat({ time }: { time: number }) {
+  const sent = time >= SENT_AT;
+  const replied = time >= REPLY_AT;
+  const draft = sent ? '' : message.slice(0, Math.max(0, Math.floor((time - TYPE_START) / TYPE_SPEED)));
+  const shownSteps = steps.slice(0, STEP_TIMES.filter((at) => time >= at).length);
+  const working = sent && !replied;
+  const elapsed = Math.floor((time - SENT_AT) / 1000);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#0a0a0a73]">
+      <div className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden">
+        <div className="flex flex-col px-12 pt-[26px] pb-8">
+          {sent && (
+            <div className="flex flex-col items-end">
+              <div className="max-w-[80%] rounded-[16px] bg-[#ebebeb14] px-4 py-2.5 text-[14px] leading-[22px]" style={{ color: text }}>
+                {message}
+              </div>
+              <div className="h-8" />
+            </div>
+          )}
+          {shownSteps.length > 0 && (
+            <div className="pt-3">
+              <div className="flex h-[26px] items-center gap-1.5 text-[12px] leading-[18px]" style={{ color: muted }}>
+                <span className="relative h-[18px] w-[22px]">
+                  <span className={`absolute top-0.5 left-[5.5px] transition-transform ${working ? '' : '-rotate-90'}`}>
+                    <Icon name="agent_arrow_down" size={14} />
+                  </span>
+                </span>
+                <span className={working ? 'text-shimmer' : ''}>{stepsSummary(shownSteps)}</span>
+              </div>
+              {working &&
+                shownSteps.map((step, index) => (
+                  <StepRow
+                    key={index}
+                    step={step}
+                    isLast={index === shownSteps.length - 1}
+                    expanded={false}
+                    onToggle={() => {}}
+                  />
+                ))}
+            </div>
+          )}
+          {working && (
+            <div className="flex items-center gap-2 pt-4 text-[11px]">
+              <WorkingSpinner />
+              <span className="text-[12px]" style={{ color: muted }}>
+                Pondering…
+              </span>
+              <span className="relative top-px text-[#a9a9ae80]">{elapsed}s</span>
+            </div>
+          )}
+          {replied && (
+            <div className="animate-fade-in pt-3">
+              <AssistantText source={reply} />
+              <div className="h-8" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="w-full px-4 pb-2">
+        <div className="flex h-[47px] items-center rounded-[22px] border border-[#ffffff1a] bg-[#29292c] pr-2 pl-2 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1)]">
+          <span className="grid size-7 shrink-0 place-items-center">
+            <Icon name="agent_paperclip" size={18} color={muted} />
+          </span>
+          <span className="min-w-0 flex-1 truncate px-2 text-[14px]" style={{ color: draft ? text : placeholder }}>
+            {draft || 'Do anything…'}
+            {!sent && time >= TYPE_START && (
+              <span className="ml-px inline-block h-[17px] w-px translate-y-[3px]" style={{ background: text }} />
+            )}
+          </span>
+          <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] px-1.5 text-[12px] font-medium text-[#e8e8eae6]">
+            <Icon name="agent_claude" size={16} color={claude} />
+            Opus 5.5
+            <span className="text-[#a9a9aeb3]">High</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2 pl-0.5">
+            <span className="grid size-7 place-items-center">
+              <Icon name="agent_microphone" size={18} color={muted} />
+            </span>
+            <span className={`grid size-7 place-items-center rounded-full bg-[#e8e8ea] ${draft || working ? '' : 'opacity-35'}`}>
+              {working ? (
+                <span className="size-[11px] rounded-[3px] bg-[#0d0d0d]" />
+              ) : (
+                <Icon name="agent_send" size={14} color="#0d0d0d" />
+              )}
+            </span>
+          </span>
+        </div>
+        <div className="flex h-6 items-center pt-2 text-[12px] font-medium text-[#a9a9ae99]">
+          <span className="flex items-center gap-1 pl-2.5">
+            <span className="flex h-5 items-center gap-1.5 px-2">
+              <Icon name="agent_folder" size={12} />
+              Local checkout
+            </span>
+            <span className="flex h-5 items-center gap-1.5 px-2">
+              <Icon name="agent_git_branch" size={12} />
+              main
+            </span>
+          </span>
+          <span className="ml-auto flex items-center gap-1 pr-2.5 pl-1 font-normal">
+            <UsageRing percent={sent ? 21 : 18} color={accent} />
+            <UsageRing percent={34} color={muted} />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AgentWindow() {
+  const { frameRef, time } = useLoopTime();
+  const title = time >= SENT_AT ? chatTitle : 'New chat';
+
+  return (
+    <div ref={frameRef} className={`${mediaFrame} grid card-raised aspect-[16/10] place-items-center`} aria-hidden="true" inert>
+      <div className="@container w-[88%] overflow-hidden rounded-[10px] shadow-[0_24px_60px_rgba(0,0,0,0.4),inset_0_0_0_1px_rgba(255,255,255,0.12)]" style={{ aspectRatio: `${WIDTH} / ${HEIGHT}` }}>
+        <div
+          className="flex origin-top-left flex-col bg-[#0d0d0dcc] font-wu text-[14px] tracking-normal select-none"
+          style={{ width: WIDTH, height: HEIGHT, color: text, scale: `tan(atan2(100cqw, ${WIDTH}px))` }}
+        >
+          <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[#ffffff1a] px-2">
+            <div className="flex h-6 max-w-[320px] items-center gap-[3px] rounded-[6px] bg-[#ebebeb1a] px-1 text-[14px]">
+              <span className="grid size-[18px] place-items-center">
+                <Icon name="agent_claude" size={14} color={claude} />
+              </span>
+              <span className="truncate pr-1">{title}</span>
+            </div>
+          </div>
+          <Chat time={time} />
+        </div>
+      </div>
+    </div>
+  );
+}

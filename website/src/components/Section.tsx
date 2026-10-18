@@ -26,16 +26,9 @@ export function MediaSection({
   );
 }
 
-export function CenterSection({ children, id, card = false }: { children: ReactNode; id?: string; card?: boolean }) {
+export function CenterSection({ children, id }: { children: ReactNode; id?: string }) {
   return (
-    <section
-      id={id}
-      className={
-        card
-          ? 'mx-1 my-28 rounded-xl card-raised px-8 py-28 max-sm:my-18 max-sm:px-4 max-sm:py-16'
-          : 'mx-auto my-28 max-w-[1240px] px-8 max-sm:my-18 max-sm:px-4'
-      }
-    >
+    <section id={id} className="mx-auto my-28 max-w-[1240px] px-8 max-sm:my-18 max-sm:px-4">
       <div className="mx-auto flex max-w-[600px] flex-col items-center gap-3 text-center">{children}</div>
     </section>
   );
