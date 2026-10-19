@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+## 1.1.8 - 2026-10-20
+
 - Fixed "Dock Right" not moving the agent panel.
 
 ## 1.1.7 - 2026-10-15
