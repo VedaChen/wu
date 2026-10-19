@@ -17,7 +17,7 @@ use gpui::{
     Transformation, WeakEntity, Window, anchored, deferred, div, percentage, point, px, rgb, svg,
 };
 use project::Project;
-use settings::Settings as _;
+use settings::{DockSide, Settings as _};
 use std::{
     cell::Cell,
     path::{Path, PathBuf},
@@ -190,7 +190,6 @@ pub struct AgentPanel {
     project: Entity<Project>,
     store: Entity<AgentStore>,
     focus_handle: FocusHandle,
-    position: DockPosition,
     search: Entity<Editor>,
     renaming: Option<RenameField>,
     row_menu: Option<RowMenu>,
@@ -238,7 +237,6 @@ impl AgentPanel {
                     project,
                     store,
                     focus_handle: cx.focus_handle(),
-                    position: DockPosition::Left,
                     search,
                     renaming: None,
                     row_menu: None,
@@ -1695,8 +1693,11 @@ impl Panel for AgentPanel {
         AGENT_PANEL_KEY
     }
 
-    fn position(&self, _: &Window, _: &App) -> DockPosition {
-        self.position
+    fn position(&self, _: &Window, cx: &App) -> DockPosition {
+        match AgentChatSettings::get_global(cx).dock {
+            DockSide::Left => DockPosition::Left,
+            DockSide::Right => DockPosition::Right,
+        }
     }
 
     fn position_is_valid(&self, position: DockPosition) -> bool {
@@ -1704,8 +1705,13 @@ impl Panel for AgentPanel {
     }
 
     fn set_position(&mut self, position: DockPosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.position = position;
-        cx.notify();
+        let dock = match position {
+            DockPosition::Left | DockPosition::Bottom => DockSide::Left,
+            DockPosition::Right => DockSide::Right,
+        };
+        settings::update_settings_file(<dyn fs::Fs>::global(cx), cx, move |content, _| {
+            content.agent_chat.get_or_insert_default().dock = Some(dock);
+        });
     }
 
     fn default_size(&self, _: &Window, _: &App) -> Pixels {

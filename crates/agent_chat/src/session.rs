@@ -21,7 +21,8 @@ use util::ResultExt as _;
 
 use crate::{AgentChatSettings, AgentKind};
 
-const TITLE_MAX_CHARS: usize = 60;
+const FIRST_MESSAGE_TITLE_CHARS: usize = 20;
+const AGENT_TITLE_CHARS: usize = 60;
 const TOOL_OUTPUT_MAX_CHARS: usize = 200_000;
 const SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 const USAGE_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -87,11 +88,19 @@ fn attachment_paths(attachments: &[PathBuf]) -> Vec<String> {
 }
 
 fn title_from(text: &str) -> String {
+    shortened_title(text, FIRST_MESSAGE_TITLE_CHARS)
+}
+
+fn agent_title(text: &str) -> String {
+    shortened_title(text, AGENT_TITLE_CHARS)
+}
+
+fn shortened_title(text: &str, max_chars: usize) -> String {
     let line = agent_harness::view::single_line(text);
-    if line.chars().count() <= TITLE_MAX_CHARS {
+    if line.chars().count() <= max_chars {
         return line;
     }
-    let mut title: String = line.chars().take(TITLE_MAX_CHARS - 1).collect();
+    let mut title: String = line.chars().take(max_chars - 1).collect();
     title.push('…');
     title
 }
@@ -1771,7 +1780,7 @@ impl AgentSession {
         if !first_prompt.is_some_and(|text| self.metadata.title == title_from(text)) {
             return;
         }
-        let title = title_from(title);
+        let title = agent_title(title);
         if title.is_empty() || title == self.metadata.title {
             return;
         }
@@ -2807,7 +2816,7 @@ impl AgentStore {
             this.update(cx, |this, cx| {
                 let mut metadata =
                     SessionMetadata::new(kind, cwd, this.new_chat_settings(kind, cx));
-                metadata.title = title_from(&external.title);
+                metadata.title = agent_title(&external.title);
                 metadata.fork_source = Some(external.id);
                 let session =
                     this.insert_session(metadata, SavedTranscript::EntriesOnly(Vec::new()), cx);

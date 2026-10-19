@@ -1045,6 +1045,10 @@ pub struct AgentChatSettingsContent {
     ///
     /// Default: true
     pub enabled: Option<bool>,
+    /// Which side of the window the agent panel docks to.
+    ///
+    /// Default: left
+    pub dock: Option<DockSide>,
     /// Which key sends a message from the chat box.
     ///
     /// Default: "enter"

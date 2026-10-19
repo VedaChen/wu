@@ -7168,7 +7168,7 @@ fn version_control_page() -> SettingsPage {
 }
 
 fn agent_chat_page() -> SettingsPage {
-    fn general_section() -> [SettingsPageItem; 2] {
+    fn general_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("General"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -7179,6 +7179,19 @@ fn agent_chat_page() -> SettingsPage {
                     pick: |settings_content| settings_content.agent_chat.as_ref()?.enabled.as_ref(),
                     write: |settings_content, value, _| {
                         settings_content.agent_chat.get_or_insert_default().enabled = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Agent Panel Dock",
+                description: "Where to dock the agent panel.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent_chat.dock"),
+                    pick: |settings_content| settings_content.agent_chat.as_ref()?.dock.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.agent_chat.get_or_insert_default().dock = value;
                     },
                 }),
                 metadata: None,

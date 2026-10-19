@@ -1,7 +1,8 @@
 use agent_harness::{PermissionMode, ReasoningLevel};
 use settings::{
     AgentChatDefaultEffort, AgentChatWhileWorking, ClaudeCodePermissionDefault,
-    CodexPermissionDefault, ContextTokens, OpencodePermissionDefault, RegisterSetting, Settings,
+    CodexPermissionDefault, ContextTokens, DockSide, OpencodePermissionDefault, RegisterSetting,
+    Settings,
 };
 pub use settings::{AgentChatModelPickerLayout, AgentChatSendKey};
 
@@ -10,6 +11,7 @@ use crate::AgentKind;
 #[derive(Clone, Debug, RegisterSetting)]
 pub struct AgentChatSettings {
     pub enabled: bool,
+    pub dock: DockSide,
     pub send_with: AgentChatSendKey,
     pub compact_transcript: bool,
     pub model_picker: AgentChatModelPickerLayout,
@@ -60,6 +62,7 @@ impl Settings for AgentChatSettings {
         }
         Self {
             enabled: content.enabled.unwrap_or(true),
+            dock: content.dock.unwrap_or(DockSide::Left),
             send_with: content.send_with.unwrap_or_default(),
             compact_transcript: content.compact_transcript.unwrap_or(false),
             model_picker: content.model_picker.unwrap_or_default(),

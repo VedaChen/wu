@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+- Fixed "Dock Right" not moving the agent panel.
+
 ## 1.1.7 - 2026-10-15
 
 - Fixed Codex bundled with the ChatGPT desktop app not found.
