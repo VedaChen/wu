@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+## 1.1.9 - 2026-10-24
+
 - Start a message with `!` in an agent chat to run it as a shell command.
 - Images can now be dragged onto Wu's dock icon and dropped into one of its windows on macOS.
 - Changing the permission mode now applies to the turn immediately instead of on the next message.
