@@ -306,6 +306,22 @@ pub(crate) fn user_message_line(text: &str, images: &[ImageBlock]) -> String {
     .to_string()
 }
 
+/// The shape Claude Code's own `!` mode records, which its history reader expects.
+pub(crate) fn bash_message_line(command: &str, output: &str) -> String {
+    json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                { "type": "text", "text": format!("<bash-input>{command}</bash-input>") },
+                { "type": "text", "text": output },
+            ],
+        },
+        "parent_tool_use_id": null,
+    })
+    .to_string()
+}
+
 /// Only pass `immediate` when no tool is open: priority `now` aborts in-flight tool calls.
 pub(crate) fn steer_message_line(
     text: &str,

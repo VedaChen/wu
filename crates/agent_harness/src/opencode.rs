@@ -168,16 +168,21 @@ fn session_rules(agent_rules: &Value, forced: &[&str]) -> Vec<Value> {
     result
 }
 
+/// OpenCode lists its default agent first.
+fn default_primary_agent(agents: &Value) -> Option<&Value> {
+    agents.as_array()?.iter().find(|agent| {
+        agent.get("mode").and_then(Value::as_str) != Some("subagent")
+            && agent.get("hidden").and_then(Value::as_bool) != Some(true)
+    })
+}
+
 fn primary_agent_rules<'a>(agents: &'a Value, requested: Option<&str>) -> Option<&'a Value> {
-    let agents = agents.as_array()?;
     let agent = match requested {
         Some(name) => agents
+            .as_array()?
             .iter()
             .find(|agent| agent.get("name").and_then(Value::as_str) == Some(name))?,
-        None => agents.iter().find(|agent| {
-            agent.get("mode").and_then(Value::as_str) != Some("subagent")
-                && agent.get("hidden").and_then(Value::as_bool) != Some(true)
-        })?,
+        None => default_primary_agent(agents)?,
     };
     agent.get("permission").filter(|rules| rules.is_array())
 }
@@ -623,6 +628,7 @@ struct QueuedSteer {
     prompt: String,
     native_command_selected: bool,
     attachments: Vec<String>,
+    shell: bool,
 }
 
 fn utf8_directory(cwd: &Path) -> Result<Option<&str>, HarnessError> {
@@ -1062,7 +1068,16 @@ async fn run_session(session: Session) {
         };
     }
     let mut turn_generation = 0_u64;
-    if let Err(error) = post_prompt(
+    if request.shell {
+        post_shell(
+            &target!(),
+            &request.prompt,
+            agent,
+            model.as_ref(),
+            turn_generation,
+        )
+        .await;
+    } else if let Err(error) = post_prompt(
         &target!(),
         &request.prompt,
         initial_native_command_selected,
@@ -1161,6 +1176,13 @@ async fn run_session(session: Session) {
                 finish!(DoneStatus::Interrupted, None);
                 break $label;
             }
+            if let Some(first) = queued_steers.pop_front_if(|steer| steer.shell) {
+                turn_generation = turn_generation.wrapping_add(1);
+                post_shell(&target!(), &first.prompt, agent, model.as_ref(), turn_generation).await;
+                acknowledge_steers!(1, $label);
+                turn = TurnState::begin(stall);
+                continue $label;
+            }
             if let Some(first) = queued_steers.pop_front() {
                 turn_generation = turn_generation.wrapping_add(1);
                 let native_command_selected = first.native_command_selected;
@@ -1168,7 +1190,7 @@ async fn run_session(session: Session) {
                 if !native_command_selected {
                     while queued_steers
                         .front()
-                        .is_some_and(|steer| !steer.native_command_selected)
+                        .is_some_and(|steer| !steer.native_command_selected && !steer.shell)
                     {
                         if let Some(next) = queued_steers.pop_front() {
                             batch.push(next);
@@ -1334,8 +1356,14 @@ async fn run_session(session: Session) {
                                 prompt,
                                 native_command_selected,
                                 attachments: steer.attachments,
+                                shell: steer.shell,
                             });
                             maybe_preempt!();
+                        } else if steer.shell {
+                            turn_generation = turn_generation.wrapping_add(1);
+                            post_shell(&target!(), &steer.prompt, agent, model.as_ref(), turn_generation).await;
+                            acknowledge_steers!(1, 'main);
+                            turn = TurnState::begin(stall);
                         } else {
                             turn_generation = turn_generation.wrapping_add(1);
                             match post_prompt(
@@ -1674,30 +1702,7 @@ async fn post_prompt(
                 command_body_v2(server.version.get(), name, arguments, spec.attachments),
             ),
         };
-        let server = server.handle();
-        let directory = target.directory.map(str::to_owned);
-        let failure_tx = target.failure_tx.clone();
-        // The command endpoint blocks for the whole turn, so it gets no call timeout.
-        tokio::spawn(async move {
-            let failure = match server
-                .post_request(&path, directory.as_deref(), &body)
-                .await
-            {
-                Err(error) => Some(error.to_string()),
-                Ok(request) => match request.send().await {
-                    Ok(response) if response.status().is_success() => None,
-                    Ok(response) => {
-                        let status = response.status();
-                        let body = response.text().await.unwrap_or_default();
-                        Some(post_error_message(&path, status, &body))
-                    }
-                    Err(error) => Some(format!("opencode POST {path}: {error}")),
-                },
-            };
-            if let Some(message) = failure {
-                report_turn_failure(&failure_tx, generation, message);
-            }
-        });
+        post_for_whole_turn(target, path, body, generation);
         return Ok(());
     }
     let (path, body) = match protocol {
@@ -1726,6 +1731,75 @@ async fn post_prompt(
         }
     });
     Ok(())
+}
+
+/// For endpoints that only answer once the turn ends, so they get no call timeout.
+fn post_for_whole_turn(target: &PromptTarget<'_>, path: String, body: Value, generation: u64) {
+    let server = target.server.handle();
+    let directory = target.directory.map(str::to_owned);
+    let failure_tx = target.failure_tx.clone();
+    tokio::spawn(async move {
+        let failure = match server
+            .post_request(&path, directory.as_deref(), &body)
+            .await
+        {
+            Err(error) => Some(error.to_string()),
+            Ok(request) => match request.send().await {
+                Ok(response) if response.status().is_success() => None,
+                Ok(response) => {
+                    let status = response.status();
+                    let body = response.text().await.unwrap_or_default();
+                    Some(post_error_message(&path, status, &body))
+                }
+                Err(error) => Some(format!("opencode POST {path}: {error}")),
+            },
+        };
+        if let Some(message) = failure {
+            report_turn_failure(&failure_tx, generation, message);
+        }
+    });
+}
+
+async fn post_shell(
+    target: &PromptTarget<'_>,
+    command: &str,
+    agent: Option<&str>,
+    model: Option<&(String, String)>,
+    generation: u64,
+) {
+    let session_id = target.session_id;
+    let (path, body) = match target.server.protocol().await {
+        Protocol::V1 => {
+            let agent = match agent {
+                Some(agent) => agent.to_owned(),
+                None => default_agent(target.server, target.directory).await,
+            };
+            let mut body = json!({ "agent": agent, "command": command });
+            if let Some((provider, model)) = model {
+                body["model"] = json!({ "providerID": provider, "modelID": model });
+            }
+            (format!("/session/{session_id}/shell"), body)
+        }
+        Protocol::V2 => (
+            format!("/api/session/{session_id}/shell"),
+            json!({ "command": command }),
+        ),
+    };
+    post_for_whole_turn(target, path, body, generation);
+}
+
+async fn default_agent(server: &Server, dir: Option<&str>) -> String {
+    let agents = match server.get_json("/agent", dir).await {
+        Ok(agents) => agents,
+        Err(error) => {
+            tracing::debug!(target: "agent_harness::opencode", "agent list unavailable: {error}");
+            Value::Null
+        }
+    };
+    default_primary_agent(&agents)
+        .and_then(|agent| agent.get("name").and_then(Value::as_str))
+        .unwrap_or("build")
+        .to_owned()
 }
 
 fn report_turn_failure(

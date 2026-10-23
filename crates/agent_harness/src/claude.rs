@@ -2,6 +2,7 @@ pub mod catalog;
 mod discovery;
 mod history;
 mod normalize;
+mod shell;
 mod wire;
 
 use std::collections::HashSet;
@@ -667,11 +668,21 @@ impl ClaudeHarness {
         tokio::spawn(stdin_writer(stdin, stdin_rx));
 
         let (images, image_problems) = load_image_blocks(&request.attachments).await;
-        let first = wire::user_message_line(
-            &apply_ultrathink(request.reasoning, &request.prompt),
-            &images,
-        );
-        stdin_tx.send(StdinMsg::Line(first)).ok();
+        let cwd = if request.cwd.is_empty() {
+            crate::executable::scratch_dir()
+        } else {
+            PathBuf::from(&request.cwd)
+        };
+        let shell = if request.shell {
+            Some(request.prompt.clone())
+        } else {
+            let first = wire::user_message_line(
+                &apply_ultrathink(request.reasoning, &request.prompt),
+                &images,
+            );
+            stdin_tx.send(StdinMsg::Line(first)).ok();
+            None
+        };
 
         let (event_tx, event_rx) = mpsc::channel::<Result<AgentEvent, HarnessError>>(256);
         for message in image_problems {
@@ -681,6 +692,8 @@ impl ClaudeHarness {
         }
         tokio::spawn(run_session(Session {
             normalizer,
+            shell,
+            cwd,
             skip_prompts: request.permission.skips_prompts(),
             child,
             stdout_lines: BufReader::new(stdout).lines(),
@@ -793,6 +806,9 @@ async fn stdin_writer(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Std
 
 struct Session {
     normalizer: Normalizer,
+    /// A `!` command to run before Claude gets anything.
+    shell: Option<String>,
+    cwd: PathBuf,
     skip_prompts: bool,
     child: Child,
     stdout_lines: tokio::io::Lines<BufReader<crate::process::ChildStdout>>,
@@ -808,6 +824,8 @@ struct Session {
 async fn run_session(session: Session) {
     let Session {
         normalizer: mut norm,
+        shell,
+        cwd,
         skip_prompts,
         mut child,
         mut stdout_lines,
@@ -841,6 +859,32 @@ async fn run_session(session: Session) {
     let mut held_done: Option<(AgentEvent, tokio::time::Instant)> = None;
     let mut done_after_interrupt = false;
     let mut escalation: Option<tokio::task::JoinHandle<()>> = None;
+
+    if let Some(command) = shell {
+        match run_shell_command(&command, &cwd, &interrupt, kill_grace, &event_tx, &stdin_tx).await
+        {
+            ShellOutcome::Sent => {}
+            ShellOutcome::Interrupted => {
+                let interrupted = AgentEvent::Done {
+                    status: DoneStatus::Interrupted,
+                    result: None,
+                    error: None,
+                    session_id: norm.session_id.clone(),
+                };
+                if event_tx.send(Ok(interrupted)).await.is_err() {
+                    log::debug!(
+                        "claude run consumer gone before an interrupted command was reported"
+                    );
+                }
+                shutdown_child(&mut child, kill_grace).await;
+                return;
+            }
+            ShellOutcome::ConsumerGone => {
+                shutdown_child(&mut child, kill_grace).await;
+                return;
+            }
+        }
+    }
 
     'main: loop {
         tokio::select! {
@@ -937,6 +981,16 @@ async fn run_session(session: Session) {
             },
 
             steer = steering.recv(), if steering_open && !interrupted => match steer {
+                Some(msg) if msg.shell => {
+                    match run_shell_command(&msg.prompt, &cwd, &interrupt, kill_grace, &event_tx, &stdin_tx).await {
+                        ShellOutcome::Sent => {}
+                        ShellOutcome::Interrupted => {
+                            interrupted = true;
+                            break 'main;
+                        }
+                        ShellOutcome::ConsumerGone => break 'main,
+                    }
+                }
                 Some(msg) => {
                     let id = uuid::Uuid::new_v4().to_string();
                     let (images, image_problems) = load_image_blocks(&msg.attachments).await;
@@ -1045,6 +1099,55 @@ async fn run_session(session: Session) {
     if let Some(handle) = escalation {
         handle.abort();
     }
+}
+
+enum ShellOutcome {
+    Sent,
+    Interrupted,
+    ConsumerGone,
+}
+
+async fn run_shell_command(
+    command: &str,
+    cwd: &std::path::Path,
+    interrupt: &crate::CancellationToken,
+    kill_grace: Duration,
+    event_tx: &mpsc::Sender<Result<AgentEvent, HarnessError>>,
+    stdin_tx: &mpsc::UnboundedSender<StdinMsg>,
+) -> ShellOutcome {
+    let id = format!("wu-shell-{}", uuid::Uuid::new_v4());
+    let call = AgentEvent::ToolCall {
+        id: id.clone(),
+        call: crate::ToolCall::Exec {
+            command: command.to_owned(),
+        },
+    };
+    if event_tx.send(Ok(call)).await.is_err() {
+        return ShellOutcome::ConsumerGone;
+    }
+    let finished = tokio::select! {
+        finished = shell::run(command, cwd, interrupt, kill_grace) => finished,
+        _ = event_tx.closed() => return ShellOutcome::ConsumerGone,
+    };
+    let run = match finished {
+        Ok(Some(run)) => run,
+        Ok(None) => return ShellOutcome::Interrupted,
+        Err(error) => shell::ShellRun::spawn_failed(&error),
+    };
+    let result = AgentEvent::ToolResult {
+        id,
+        is_error: run.failed,
+        output: run.display(),
+        diff: None,
+    };
+    if event_tx.send(Ok(result)).await.is_err() {
+        return ShellOutcome::ConsumerGone;
+    }
+    let line = wire::bash_message_line(command, &run.for_model());
+    if stdin_tx.send(StdinMsg::Line(line)).is_err() {
+        log::debug!("claude stdin writer gone before a shell command's output was sent");
+    }
+    ShellOutcome::Sent
 }
 
 type RequestInputFn = Box<
@@ -1439,6 +1542,7 @@ mod tests {
             skills: Vec::new(),
             auto_compact_tokens: None,
             chrome: false,
+            shell: false,
         };
         assert!(flag_settings(&request).is_empty());
         request.auto_compact_tokens = Some(150_000);
@@ -1463,6 +1567,7 @@ mod tests {
             skills: Vec::new(),
             auto_compact_tokens: None,
             chrome: true,
+            shell: false,
         };
         let harness = ClaudeHarness::new();
         let args = |request: &RunRequest| -> Vec<String> {

@@ -25,8 +25,8 @@ use crate::process::{Child, Command, Stdio};
 use crate::{Harness, HarnessError, RunControls, SteerMessage};
 use catalog::{REASONING_LEVELS, sandbox_mode, sandbox_policy_value, static_models, to_effort};
 use normalize::{
-    ChildRoute, Phase, ReasoningStream, delta_text, item_id, item_type, notification_thread_id,
-    route_child_notification, turn_error_message, turn_id, usage_event,
+    ChildRoute, Phase, ReasoningStream, delta_text, is_user_shell, item_id, item_type,
+    notification_thread_id, route_child_notification, turn_error_message, turn_id, usage_event,
 };
 
 pub fn resolve_codex_executable() -> Option<PathBuf> {
@@ -838,7 +838,20 @@ fn command_with_extras_error() -> HarnessError {
     )
 }
 
-async fn start_turn(client: &RpcClient, params: Value) -> Result<String, HarnessError> {
+enum TurnStart {
+    Prompt(Value),
+    Shell(Value),
+}
+
+async fn start_turn(client: &RpcClient, start: TurnStart) -> Result<String, HarnessError> {
+    let params = match start {
+        TurnStart::Prompt(params) => params,
+        TurnStart::Shell(params) => {
+            // Codex reports the turn's id in `turn/started`, not in this response.
+            client.request("thread/shellCommand", params).await?;
+            return Ok(String::new());
+        }
+    };
     let text = params
         .pointer("/input/0/text")
         .and_then(Value::as_str)
@@ -938,7 +951,7 @@ async fn run_session(session: Session) {
             match client.request("thread/resume", Value::Object(p)).await {
                 Ok(thread) => thread,
                 Err(e) => {
-                    if command_request(&request.prompt, resume)?.is_some() {
+                    if !request.shell && command_request(&request.prompt, resume)?.is_some() {
                         return Err(e);
                     }
                     tracing::debug!(
@@ -1052,18 +1065,28 @@ async fn run_session(session: Session) {
         return;
     }
 
+    let next_turn = |permission: PermissionMode, msg: &SteerMessage| {
+        if msg.shell {
+            TurnStart::Shell(json!({ "threadId": thread_id, "command": msg.prompt }))
+        } else {
+            TurnStart::Prompt(turn_params(
+                permission,
+                &msg.prompt,
+                &msg.attachments,
+                &msg.skills,
+            ))
+        }
+    };
+
     let mut router = TurnRouter::default();
-    match start_turn(
-        &client,
-        turn_params(
-            permission,
-            &request.prompt,
-            &request.attachments,
-            &request.skills,
-        ),
-    )
-    .await
-    {
+    let first = SteerMessage {
+        prompt: request.prompt.clone(),
+        message_id: None,
+        attachments: request.attachments.clone(),
+        skills: request.skills.clone(),
+        shell: request.shell,
+    };
+    match start_turn(&client, next_turn(permission, &first)).await {
         Ok(id) => router.adopt_started(id),
         Err(e) => {
             send_final(
@@ -1092,10 +1115,12 @@ async fn run_session(session: Session) {
     let mut interrupted = false;
     let mut interrupt_sent = false;
     let mut done_current = false;
-    let mut current_native = command_request(&request.prompt, &thread_id)
-        .ok()
-        .flatten()
-        .is_some();
+    let mut current_native = request.shell
+        || command_request(&request.prompt, &thread_id)
+            .ok()
+            .flatten()
+            .is_some();
+    let mut shell_command = request.shell.then(|| request.prompt.clone());
     let mut done_after_interrupt = false;
     let mut escalation: Option<tokio::task::JoinHandle<()>> = None;
 
@@ -1207,6 +1232,17 @@ async fn run_session(session: Session) {
                                     break 'main;
                                 }
                             }
+                        } else if let Some(command) = &shell_command
+                            && is_user_shell(item)
+                        {
+                            // Codex wraps the typed command in a login shell call.
+                            let mut item = item.clone();
+                            item["command"] = Value::String(command.clone());
+                            for ev in children.parent_item(phase, &item) {
+                                if !send(&event_tx, ev).await {
+                                    break 'main;
+                                }
+                            }
                         } else {
                             for ev in children.parent_item(phase, item) {
                                 if !send(&event_tx, ev).await {
@@ -1280,10 +1316,11 @@ async fn run_session(session: Session) {
                         }
                         current_native = false;
                         if let Some(msg) = queued_steers.pop_front() {
-                            current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
+                            current_native = msg.shell || command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
+                            shell_command = msg.shell.then(|| msg.prompt.clone());
                             if !steer_as_new_turn(
                                 &client,
-                                turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills),
+                                next_turn(permission, &msg),
                                 &mut router,
                                 &event_tx,
                                 &mut assistant_message_id,
@@ -1381,8 +1418,17 @@ async fn run_session(session: Session) {
             steer = steering.recv(), if steering_open && !interrupted => match steer {
                 Some(msg) => {
                     // Steered acks must stay FIFO, so nothing may overtake a queued command.
-                    if !done_current && (!queued_steers.is_empty() || current_native || !matches!(command_request(&msg.prompt, &thread_id), Ok(None))) {
+                    if !done_current && (msg.shell || !queued_steers.is_empty() || current_native || !matches!(command_request(&msg.prompt, &thread_id), Ok(None))) {
                         queued_steers.push_back(msg);
+                        continue 'main;
+                    }
+                    if msg.shell {
+                        current_native = true;
+                        shell_command = Some(msg.prompt.clone());
+                        if !steer_as_new_turn(
+                            &client, next_turn(permission, &msg), &mut router, &event_tx,
+                            &mut assistant_message_id, &mut done_current,
+                        ).await { break 'main; }
                         continue 'main;
                     }
                     if let Some(expected) = router.active.clone() {
@@ -1418,8 +1464,9 @@ async fn run_session(session: Session) {
                                     queued_steers.push_back(msg);
                                 } else {
                                     current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
+                                    shell_command = None;
                                     if !steer_as_new_turn(
-                                        &client, turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
+                                        &client, next_turn(permission, &msg), &mut router, &event_tx,
                                         &mut assistant_message_id, &mut done_current,
                                     ).await { break 'main; }
                                 }
@@ -1427,8 +1474,9 @@ async fn run_session(session: Session) {
                         }
                     } else {
                         current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
+                        shell_command = None;
                         if !steer_as_new_turn(
-                            &client, turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
+                            &client, next_turn(permission, &msg), &mut router, &event_tx,
                             &mut assistant_message_id, &mut done_current,
                         ).await { break 'main; }
                     }
@@ -1515,7 +1563,7 @@ async fn run_session(session: Session) {
 /// Returns false when the session loop should end.
 async fn steer_as_new_turn(
     client: &RpcClient,
-    params: Value,
+    params: TurnStart,
     router: &mut TurnRouter,
     event_tx: &mpsc::Sender<Result<AgentEvent, HarnessError>>,
     assistant_message_id: &mut String,

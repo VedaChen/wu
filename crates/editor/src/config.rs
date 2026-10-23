@@ -116,6 +116,11 @@ impl Editor {
         cx.notify();
     }
 
+    pub fn set_bar_cursor_width(&mut self, width: Pixels, cx: &mut Context<Self>) {
+        self.bar_cursor_width = width;
+        cx.notify();
+    }
+
     pub(crate) fn gutter_background(&self, cx: &App) -> Hsla {
         let colors = cx.theme().colors();
         if self.gutter_matches_text_background {

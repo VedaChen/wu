@@ -143,6 +143,9 @@ pub struct RunRequest {
     /// Lets Claude Code use the browser through the Claude in Chrome extension.
     #[serde(default)]
     pub chrome: bool,
+    /// `prompt` is a shell command the user typed after `!`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub shell: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

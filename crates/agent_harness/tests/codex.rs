@@ -49,6 +49,7 @@ fn request(prompt: &str) -> RunRequest {
         skills: Vec::new(),
         auto_compact_tokens: None,
         chrome: false,
+        shell: false,
     }
 }
 
@@ -295,6 +296,7 @@ async fn steering_uses_turn_steer_with_expected_turn_id() {
             message_id: None,
             attachments: Vec::new(),
             skills: Vec::new(),
+            shell: false,
         })
         .await
         .expect("steer queued");
@@ -340,6 +342,7 @@ async fn rejected_steer_falls_back_to_a_follow_up_turn() {
             message_id: None,
             attachments: Vec::new(),
             skills: Vec::new(),
+            shell: false,
         })
         .await
         .expect("steer queued");
@@ -932,6 +935,7 @@ async fn live_subagent_spawn_and_followup_keep_one_transcript() {
                 message_id: None,
                 attachments: Vec::new(),
                 skills: Vec::new(),
+                shell: false,
             }).await.unwrap();
         }
         if turn == 2 {
@@ -1155,6 +1159,83 @@ async fn real_image_generation_smoke() {
 }
 
 #[tokio::test]
+async fn shell_commands_run_as_a_turn_and_show_the_typed_command() {
+    let (controls, steer, _) = controls("Yes");
+    drop(steer);
+    let mut req = request("ls -la");
+    req.shell = true;
+    let events = run_to_end(&harness(), req, controls).await;
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            AgentEvent::ToolCall { call: ToolCall::Exec { command }, .. } if command == "ls -la"
+        )),
+        "{events:?}"
+    );
+    assert!(events.iter().any(|event| matches!(
+        event,
+        AgentEvent::ToolResult { is_error: false, output: Some(output), .. } if output == "total 0"
+    )), "{events:?}");
+    assert!(matches!(
+        events.last(),
+        Some(AgentEvent::Done {
+            status: DoneStatus::Completed,
+            ..
+        })
+    ));
+}
+
+#[tokio::test]
+async fn shell_commands_sent_to_an_idle_run_start_a_shell_turn() {
+    let (controls, steer, _) = controls("Yes");
+    let mut stream = harness()
+        .run(request("scenario:shell-steer"), controls)
+        .await
+        .expect("run starts");
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while let Some(event) = stream.next().await {
+            if matches!(event.expect("stream event"), AgentEvent::Done { .. }) {
+                return;
+            }
+        }
+        panic!("the first turn never finished");
+    })
+    .await
+    .expect("first turn finished in time");
+    steer
+        .send(SteerMessage {
+            prompt: "pwd".into(),
+            message_id: None,
+            attachments: Vec::new(),
+            skills: Vec::new(),
+            shell: true,
+        })
+        .await
+        .expect("run takes the command");
+    drop(steer);
+    let events = tokio::time::timeout(
+        Duration::from_secs(10),
+        stream.map(|r| r.expect("stream event")).collect::<Vec<_>>(),
+    )
+    .await
+    .expect("run finished in time");
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            AgentEvent::ToolCall { call: ToolCall::Exec { command }, .. } if command == "pwd"
+        )),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            AgentEvent::ToolResult { output: Some(output), .. } if output == "/w"
+        )),
+        "{events:?}"
+    );
+}
+
+#[tokio::test]
 async fn native_commands_use_rpc_operations_and_render_results() {
     for (prompt, resume, expected) in [
         ("/compact", true, "Context compacted."),
@@ -1216,6 +1297,7 @@ async fn native_command_during_a_turn_waits_for_its_boundary() {
                             message_id: None,
                             attachments: Vec::new(),
                             skills: Vec::new(),
+                            shell: false,
                         })
                         .await
                         .unwrap();
@@ -1257,6 +1339,7 @@ async fn ordinary_followup_cannot_overtake_a_queued_native_command() {
                                 message_id: None,
                                 attachments: Vec::new(),
                                 skills: Vec::new(),
+                                shell: false,
                             })
                             .await
                             .unwrap();
@@ -1385,6 +1468,7 @@ async fn image_attachments_become_local_image_inputs_on_start_and_steer() {
             message_id: None,
             attachments: vec!["/tmp/steer.png".into()],
             skills: Vec::new(),
+            shell: false,
         })
         .await
         .unwrap();
@@ -1407,6 +1491,7 @@ async fn selected_skills_become_skill_inputs_on_start_and_steer() {
             message_id: Some("skill-steer".into()),
             attachments: Vec::new(),
             skills: vec![skill_ref("review", "/repo/other/SKILL.md")],
+            shell: false,
         })
         .await
         .unwrap();
@@ -1429,6 +1514,7 @@ async fn skills_survive_a_rejected_steer_falling_back_to_a_new_turn() {
             message_id: None,
             attachments: Vec::new(),
             skills: vec![skill_ref("followup", "/repo/followup/SKILL.md")],
+            shell: false,
         })
         .await
         .unwrap();

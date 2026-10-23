@@ -72,6 +72,15 @@ if has "$turnline" '"method":"thread/compact/start"'; then
   emit '{"method":"turn/completed","params":{"turn":{"id":"native-1","status":"completed"}}}'
   exec sleep 30
 fi
+if has "$turnline" '"method":"thread/shellCommand"'; then
+  has "$turnline" '"command":"ls -la"' || exit 1
+  emit "{\"id\":$tid,\"result\":{}}"
+  emit '{"method":"turn/started","params":{"turn":{"id":"shell-1"}}}'
+  emit '{"method":"item/started","params":{"item":{"type":"commandExecution","id":"cmd-1","command":"/bin/zsh -lc '"'"'ls -la'"'"'","source":"userShell","status":"inProgress"}}}'
+  emit '{"method":"item/completed","params":{"item":{"type":"commandExecution","id":"cmd-1","command":"/bin/zsh -lc '"'"'ls -la'"'"'","source":"userShell","status":"completed","aggregatedOutput":"total 0\n","exitCode":0}}}'
+  emit '{"method":"turn/completed","params":{"turn":{"id":"shell-1","status":"completed"}}}'
+  exec sleep 30
+fi
 if has "$turnline" '"method":"review/start"'; then
   has "$turnline" '"delivery":"inline"' || exit 1
   emit "{\"id\":$tid,\"result\":{\"turn\":{\"id\":\"native-1\"}}}"
@@ -82,6 +91,21 @@ if has "$turnline" '"method":"review/start"'; then
 fi
 
 case "$turnline" in
+*scenario:shell-steer*)
+  emit "{\"id\":$tid,\"result\":{\"turn\":{\"id\":\"t-1\"}}}"
+  emit '{"method":"turn/started","params":{"turn":{"id":"t-1"}}}'
+  emit '{"method":"item/agentMessage/delta","params":{"delta":"ready"}}'
+  emit '{"method":"turn/completed","params":{"turn":{"id":"t-1","status":"completed"}}}'
+  read -r next || exit 1
+  has "$next" '"method":"thread/shellCommand"' && has "$next" '"command":"pwd"' || exit 1
+  emit "{\"id\":$(rid "$next"),\"result\":{}}"
+  emit '{"method":"turn/started","params":{"turn":{"id":"shell-2"}}}'
+  emit '{"method":"item/started","params":{"item":{"type":"commandExecution","id":"cmd-2","command":"/bin/zsh -lc pwd","source":"userShell","status":"inProgress"}}}'
+  emit '{"method":"item/completed","params":{"item":{"type":"commandExecution","id":"cmd-2","command":"/bin/zsh -lc pwd","source":"userShell","status":"completed","aggregatedOutput":"/w\n","exitCode":0}}}'
+  emit '{"method":"turn/completed","params":{"turn":{"id":"shell-2","status":"completed"}}}'
+  exec sleep 30
+  ;;
+
 *scenario:native-skills*)
   for want in '"type":"skill"' '"name":"review"' '"path":"/repo/a b/SKILL.md"'; do
     has "$turnline" "$want" || { fail_turn "$tid" "initial native skill missing"; exit 0; }

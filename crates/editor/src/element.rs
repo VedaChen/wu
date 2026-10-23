@@ -1072,6 +1072,7 @@ impl EditorElement {
                     let mut cursor = CursorLayout {
                         color: player_color.cursor,
                         block_width,
+                        bar_width: editor.bar_cursor_width,
                         origin: point(x, y),
                         line_height,
                         shape: selection.cursor_shape,
@@ -10081,9 +10082,12 @@ struct NavigationOverlayLayoutContext<'a> {
 
 const LABEL_LINE_HEIGHT_PADDING_PX: f32 = 2.0;
 
+pub(crate) const DEFAULT_BAR_CURSOR_WIDTH: Pixels = px(2.0);
+
 pub struct CursorLayout {
     origin: gpui::Point<Pixels>,
     block_width: Pixels,
+    bar_width: Pixels,
     line_height: Pixels,
     color: Hsla,
     shape: CursorShape,
@@ -10110,6 +10114,7 @@ impl CursorLayout {
         CursorLayout {
             origin,
             block_width,
+            bar_width: DEFAULT_BAR_CURSOR_WIDTH,
             line_height,
             color,
             shape,
@@ -10129,7 +10134,7 @@ impl CursorLayout {
         match self.shape {
             CursorShape::Bar => Bounds {
                 origin: self.origin + origin,
-                size: size(px(2.0), self.line_height),
+                size: size(self.bar_width, self.line_height),
             },
             CursorShape::Block | CursorShape::Hollow => Bounds {
                 origin: self.origin + origin,
@@ -10160,7 +10165,7 @@ impl CursorLayout {
             } else {
                 match self.shape {
                     CursorShape::Bar => point(
-                        bounds.right() - px(2.),
+                        bounds.right() - self.bar_width,
                         bounds.top() - text_size / 2. - px(1.),
                     ),
                     _ => point(
