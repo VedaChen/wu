@@ -20,6 +20,12 @@ const TRAY_RADIUS: f32 = 16.;
 pub(super) const TRAY_SIDE_INSET: f32 = 16.;
 pub(super) const TRAY_COMPOSER_OVERLAP: f32 = 18.;
 const COLLAPSE_HYSTERESIS: f32 = 32.;
+const QUESTION_LINE_HEIGHT: f32 = 20.;
+const QUESTION_COLLAPSED_LINES: usize = 4;
+const QUESTION_COLLAPSE_CHARS: usize = 160;
+const QUESTION_EXPANDED_FRACTION: f32 = 0.4;
+const QUESTION_EXPANDED_FALLBACK: f32 = 280.;
+const QUESTION_OPTIONS_FRACTION: f32 = 0.3;
 
 #[derive(Default)]
 pub(super) struct ComposerLayout {
@@ -717,6 +723,73 @@ impl ChatView {
             })
     }
 
+    fn render_question_text(&self, id: &str, text: &str, cx: &Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors();
+        let collapsible = text.lines().count() > QUESTION_COLLAPSED_LINES
+            || text.chars().count() > QUESTION_COLLAPSE_CHARS;
+        let expanded = self.expanded_questions.contains(id);
+        let expanded_max_height = self
+            .root_bounds
+            .get()
+            .map_or(px(QUESTION_EXPANDED_FALLBACK), |bounds| {
+                bounds.size.height * QUESTION_EXPANDED_FRACTION
+            });
+        let toggle_group: SharedString = format!("agent-question-toggle-{id}").into();
+        let toggle_id = id.to_string();
+        v_flex()
+            .mt(px(6.))
+            .text_size(ui(15.))
+            .line_height(px(QUESTION_LINE_HEIGHT))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(colors.text)
+            // Character counts can't predict wrapping, so the text scrolls whatever its length.
+            .child(
+                div()
+                    .id(SharedString::from(format!("agent-question-text-{id}")))
+                    .max_h(if collapsible && !expanded {
+                        px(QUESTION_LINE_HEIGHT * QUESTION_COLLAPSED_LINES as f32)
+                    } else {
+                        expanded_max_height
+                    })
+                    .overflow_y_scroll()
+                    .child(text.to_string()),
+            )
+            .when(collapsible, |this| {
+                this.child(
+                    h_flex()
+                        .id(SharedString::from(format!("agent-question-expand-{id}")))
+                        .group(toggle_group.clone())
+                        .mt(px(6.))
+                        .gap(px(5.))
+                        .text_size(ui(13.))
+                        .font_weight(FontWeight::NORMAL)
+                        .text_color(colors.text_muted)
+                        .cursor_pointer()
+                        .hover(|style| style.text_color(colors.text))
+                        .child(if expanded { "Show less" } else { "Show all" })
+                        .child(
+                            super::icon(
+                                if expanded {
+                                    IconName::AgentArrowUp
+                                } else {
+                                    IconName::AgentArrowDown
+                                },
+                                12.,
+                            )
+                            .text_color(colors.text_muted)
+                            .group_hover(toggle_group, |style| style.text_color(colors.text)),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.expanded_questions.remove(&toggle_id) {
+                                this.expanded_questions.insert(toggle_id.clone());
+                            }
+                            cx.notify();
+                        })),
+                )
+            })
+            .into_any_element()
+    }
+
     pub(super) fn render_question_panel(&self, pending: &PendingQuestion, cx: &Context<Self>) -> AnyElement {
         let colors = cx.theme().colors();
         let pending_id: SharedString = pending.id().to_string().into();
@@ -804,6 +877,12 @@ impl ChatView {
         };
         let muted_label = colors.text_muted.opacity(0.6);
         let back_hover = ink(0.06, cx);
+        let options_max_height = self
+            .root_bounds
+            .get()
+            .map_or(px(QUESTION_EXPANDED_FALLBACK), |bounds| {
+                bounds.size.height * QUESTION_OPTIONS_FRACTION
+            });
         v_flex()
             .w_full()
             .rounded(px(COMPOSER_RADIUS))
@@ -841,15 +920,7 @@ impl ChatView {
                                 )
                             }),
                     )
-                    .child(
-                        div()
-                            .mt(px(6.))
-                            .text_size(ui(15.))
-                            .line_height(px(20.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(colors.text)
-                            .child(question.question.clone()),
-                    )
+                    .child(self.render_question_text(&question.id, &question.question, cx))
                     .when(question.multi_select, |this| {
                         this.child(
                             div()
@@ -859,7 +930,15 @@ impl ChatView {
                                 .child("Select one or more options."),
                         )
                     })
-                    .child(v_flex().mt(px(12.)).gap(px(4.)).children(options))
+                    .child(
+                        v_flex()
+                            .id("agent-question-options")
+                            .mt(px(12.))
+                            .gap(px(4.))
+                            .max_h(options_max_height)
+                            .overflow_y_scroll()
+                            .children(options),
+                    )
                     .when_some(answer_editor, |this, editor| {
                         this.child(
                             div()

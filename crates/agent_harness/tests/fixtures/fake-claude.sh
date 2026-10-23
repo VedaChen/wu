@@ -11,6 +11,17 @@ read -r first || exit 1
 
 emit() { printf '%s\n' "$1"; }
 
+# Permission mode changes can arrive between any two replies.
+read_reply() {
+  while read -r line; do
+    case "$line" in
+    *'"subtype":"set_permission_mode"'*) ;;
+    *) eval "$1=\$line"; return 0 ;;
+    esac
+  done
+  return 1
+}
+
 case "$first" in
 
 *scenario:fork-fallback*)
@@ -107,7 +118,7 @@ case "$first" in
   emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":["Bash"],"cwd":"/tmp","session_id":"sess-ask"}'
   # A plain tool permission request: must be auto-allowed.
   emit '{"type":"control_request","request_id":"cr-0","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"}}}'
-  read -r resp0 || exit 1
+  read_reply resp0 || exit 1
   case "$resp0" in
   *'"request_id":"cr-0"'*'"behavior":"allow"'*) ;;
   *)
@@ -117,7 +128,7 @@ case "$first" in
   esac
   # AskUserQuestion: must be intercepted and answered via updatedInput.answers.
   emit '{"type":"control_request","request_id":"cr-1","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":{"questions":[{"header":"Choice","question":"Pick one","options":["A","B"],"multiSelect":false}]}}}'
-  read -r resp1 || exit 1
+  read_reply resp1 || exit 1
   case "$resp1" in
   *'"behavior":"allow"'*)
     case "$resp1" in
@@ -131,6 +142,28 @@ case "$first" in
     ;;
   *)
     emit '{"type":"result","subtype":"error_during_execution","errors":["AskUserQuestion was denied"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-ask"}'
+    ;;
+  esac
+  ;;
+
+*scenario:mode-change*)
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":["Bash"],"cwd":"/tmp","session_id":"sess-mode"}'
+  read -r change || exit 1
+  case "$change" in
+  *'"subtype":"set_permission_mode"'*'"mode":"default"'*) ;;
+  *)
+    emit '{"type":"result","subtype":"error_during_execution","errors":["no mode change"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-mode"}'
+    exit 0
+    ;;
+  esac
+  emit '{"type":"control_request","request_id":"cr-0","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"}}}'
+  read_reply resp0 || exit 1
+  case "$resp0" in
+  *'"request_id":"cr-0"'*'"behavior":"allow"'*)
+    emit '{"type":"result","subtype":"success","result":"allowed","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-mode"}'
+    ;;
+  *)
+    emit '{"type":"result","subtype":"error_during_execution","errors":["bash tool was not allowed"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-mode"}'
     ;;
   esac
   ;;

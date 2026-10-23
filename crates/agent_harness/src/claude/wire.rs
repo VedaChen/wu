@@ -230,6 +230,28 @@ pub(crate) fn unreadable_control_request_id(line: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// The error Claude answered one of Wu's own control requests with.
+pub(crate) fn control_error(line: &str, request_id_prefix: &str) -> Option<String> {
+    if !line.contains(request_id_prefix) {
+        return None;
+    }
+    let value: Value = serde_json::from_str(line).ok()?;
+    let response = value.get("response")?;
+    let rejected = value.get("type").and_then(Value::as_str) == Some("control_response")
+        && response.get("subtype").and_then(Value::as_str) == Some("error")
+        && response
+            .get("request_id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id.starts_with(request_id_prefix));
+    rejected.then(|| {
+        response
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    })
+}
+
 pub(crate) fn parse_frame(line: &str) -> Result<Frame, serde_json::Error> {
     let value: Value = serde_json::from_str(line)?;
     let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
@@ -334,6 +356,15 @@ pub(crate) fn deny_response(message: &str) -> Value {
     json!({ "behavior": "deny", "message": message })
 }
 
+pub(crate) fn set_permission_mode_line(request_id: &str, mode: &str) -> String {
+    json!({
+        "type": "control_request",
+        "request_id": request_id,
+        "request": { "subtype": "set_permission_mode", "mode": mode },
+    })
+    .to_string()
+}
+
 pub(crate) fn interrupt_request_line(request_id: &str) -> String {
     json!({
         "type": "control_request",
@@ -346,6 +377,19 @@ pub(crate) fn interrupt_request_line(request_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn control_errors_are_read_only_for_wu_requests() {
+        let rejected = r#"{"type":"control_response","response":{"subtype":"error","request_id":"wu-set-mode-1","error":"auto mode unavailable for this model"}}"#;
+        assert_eq!(
+            control_error(rejected, "wu-set-mode-").as_deref(),
+            Some("auto mode unavailable for this model")
+        );
+        let accepted = r#"{"type":"control_response","response":{"subtype":"success","request_id":"wu-set-mode-1"}}"#;
+        assert_eq!(control_error(accepted, "wu-set-mode-"), None);
+        let other = r#"{"type":"control_response","response":{"subtype":"error","request_id":"int_1","error":"x"}}"#;
+        assert_eq!(control_error(other, "wu-set-mode-"), None);
+    }
 
     #[test]
     fn image_only_messages_carry_no_empty_text_block() {

@@ -11,6 +11,7 @@ mod mermaid;
 mod outline;
 mod queue_panel;
 mod search;
+mod side_pane;
 mod todo_panel;
 
 use crate::{
@@ -134,6 +135,10 @@ struct SubagentRef {
 pub struct ChatView {
     session: Entity<AgentSession>,
     subagent: Option<SubagentRef>,
+    host: Option<WeakEntity<ChatView>>,
+    side_pane: Option<side_pane::SidePane>,
+    side_pane_openings: usize,
+    _side_pane_load: Task<()>,
     workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
     store: Entity<AgentStore>,
@@ -145,6 +150,7 @@ pub struct ChatView {
     expanded_rows: HashSet<String>,
     group_overrides: HashMap<String, bool>,
     expanded_users: HashSet<usize>,
+    expanded_questions: HashSet<String>,
     user_markdown: HashMap<usize, Entity<Markdown>>,
     selected_options: HashMap<String, Vec<String>>,
     question_pages: HashMap<String, usize>,
@@ -165,6 +171,7 @@ pub struct ChatView {
     _dictation_download: Task<()>,
     _glide: Task<()>,
     container_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    root_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     painted_turns: Rc<std::cell::RefCell<HashMap<usize, Bounds<Pixels>>>>,
     this: WeakEntity<ChatView>,
     rename_editor: Option<Entity<Editor>>,
@@ -300,6 +307,10 @@ impl ChatView {
         let mut view = Self {
             session,
             subagent,
+            host: None,
+            side_pane: None,
+            side_pane_openings: 0,
+            _side_pane_load: Task::ready(()),
             workspace,
             focus_handle: cx.focus_handle(),
             store,
@@ -311,6 +322,7 @@ impl ChatView {
             expanded_rows: HashSet::default(),
             group_overrides: HashMap::default(),
             expanded_users: HashSet::default(),
+            expanded_questions: HashSet::default(),
             user_markdown: HashMap::default(),
             selected_options: HashMap::default(),
             question_pages: HashMap::default(),
@@ -331,6 +343,7 @@ impl ChatView {
             _dictation_download: Task::ready(()),
             _glide: Task::ready(()),
             container_bounds: Default::default(),
+            root_bounds: Default::default(),
             painted_turns: Default::default(),
             this: cx.entity().downgrade(),
             rename_editor: None,
@@ -370,6 +383,14 @@ impl ChatView {
     }
 
     fn sync_answer_editors(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let session = self.session.read(cx);
+        self.expanded_questions.retain(|id| {
+            session
+                .pending_questions()
+                .iter()
+                .flat_map(|pending| &pending.questions)
+                .any(|question| &question.id == id)
+        });
         let free_text: Vec<String> = self
             .session
             .read(cx)
@@ -494,6 +515,20 @@ impl ChatView {
             id,
             title: subagent_title(call),
         };
+        match self.host.as_ref().and_then(|host| host.upgrade()) {
+            Some(host) => host.update(cx, |host, cx| {
+                host.open_subagent_in_side_pane(subagent, window, cx)
+            }),
+            None => self.open_subagent_in_side_pane(subagent, window, cx),
+        }
+    }
+
+    fn open_subagent_in_tab(
+        &mut self,
+        subagent: SubagentRef,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let session = self.session.clone();
         let store = self.store.clone();
         let project = self.project.clone();
@@ -2908,8 +2943,14 @@ impl ChatView {
         let root = v_flex()
             .key_context("AgentChat")
             .track_focus(&self.focus_handle)
+            .relative()
             .size_full()
-            .bg(cx.theme().colors().editor_background);
+            .when(self.side_pane.is_none(), |root| {
+                root.bg(cx.theme().colors().editor_background)
+            })
+            .child(self.track_root_bounds())
+            .children(self.render_lightbox(cx))
+            .children(self.render_link_menu());
         if self.entries(cx).is_empty() {
             let message = if self.is_working(cx) {
                 "Waiting for the subagent…"
@@ -2927,7 +2968,7 @@ impl ChatView {
                     .child(message),
             );
         }
-        root.child(self.render_transcript(cx))
+        root.child(self.render_with_side_pane(self.render_transcript(cx).into_any_element(), cx))
     }
 }
 
@@ -2960,7 +3001,10 @@ impl Render for ChatView {
             .key_context("AgentChat")
             .relative()
             .size_full()
-            .bg(cx.theme().colors().editor_background)
+            .when(self.side_pane.is_none(), |root| {
+                root.bg(cx.theme().colors().editor_background)
+            })
+            .child(self.track_root_bounds())
             .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(drop_highlight))
             .drag_over::<DraggedSelection>(move |style, _, _, _| style.bg(drop_highlight))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
@@ -2984,7 +3028,10 @@ impl Render for ChatView {
                 this.dictation_key_up(event, cx)
             }));
         if is_new_chat {
-            return root.child(self.render_new_chat(window, cx)).into_any_element();
+            let new_chat = self.render_new_chat(window, cx).into_any_element();
+            return root
+                .child(self.render_with_side_pane(new_chat, cx))
+                .into_any_element();
         }
         let expanded = self.composer_is_expanded(window, cx);
         let composer_area = match pending.and_then(|id| {
@@ -2998,21 +3045,25 @@ impl Render for ChatView {
             Some(panel) => panel,
             None => self.render_pill(expanded, DOCKED_COMPOSER_RADIUS, window, cx),
         };
-        root.child(self.render_transcript(cx)).child(
-            h_flex().w_full().justify_center().child(
-                v_flex()
-                    .w_full()
-                    .max_w(px(COMPOSER_WIDTH))
-                    .px(px(16.))
-                    .pb(px(8.))
-                    .child(self.render_status_strip(cx))
-                    .children(self.render_todo_panel(cx))
-                    .children(self.render_queue_panel(cx))
-                    .child(composer_area)
-                    .child(div().pt(px(8.)).child(self.render_footer(cx))),
-            ),
-        )
-        .into_any_element()
+        let chat = v_flex()
+            .size_full()
+            .child(self.render_transcript(cx))
+            .child(
+                h_flex().w_full().justify_center().child(
+                    v_flex()
+                        .w_full()
+                        .max_w(px(COMPOSER_WIDTH))
+                        .px(px(16.))
+                        .pb(px(8.))
+                        .child(self.render_status_strip(cx))
+                        .children(self.render_todo_panel(cx))
+                        .children(self.render_queue_panel(cx))
+                        .child(composer_area)
+                        .child(div().pt(px(8.)).child(self.render_footer(cx))),
+                ),
+            );
+        root.child(self.render_with_side_pane(chat.into_any_element(), cx))
+            .into_any_element()
     }
 }
 
@@ -3242,7 +3293,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn spawn_rows_open_the_subagent_in_its_own_tab(cx: &mut TestAppContext) {
+    async fn spawn_rows_open_the_subagent_in_the_side_pane(cx: &mut TestAppContext) {
         cx.update(|cx| {
             workspace::AppState::test(cx);
             editor::init(cx);
@@ -3279,12 +3330,47 @@ mod tests {
         };
         open(cx);
         open(cx);
-        let views: Vec<Entity<ChatView>> =
-            workspace.read_with(cx, |workspace, cx| workspace.items_of_type::<ChatView>(cx).collect());
-        assert_eq!(views.len(), 2, "opening twice reuses the subagent tab");
-        let subagent_view = views
-            .into_iter()
-            .find(|view| view.read_with(cx, |view, _| view.is_subagent()))
+        let tab_count = |cx: &mut VisualTestContext| {
+            workspace.read_with(cx, |workspace, cx| {
+                workspace.items_of_type::<ChatView>(cx).count()
+            })
+        };
+        assert_eq!(
+            tab_count(cx),
+            1,
+            "the subagent opens beside the chat, not in a tab"
+        );
+        chat.read_with(cx, |chat, cx| {
+            let Some(side_pane::SidePaneContent::Subagent { view, .. }) = chat.side_pane_content()
+            else {
+                panic!("expected the subagent in the side pane");
+            };
+            let view = view.read(cx);
+            assert_eq!(view.title(cx), "scan the repo");
+            assert_eq!(view.entries(cx).len(), 3);
+        });
+
+        chat.update_in(cx, |chat, window, cx| {
+            chat.move_side_pane_to_tab(window, cx)
+        });
+        cx.run_until_parked();
+        open(cx);
+        chat.update_in(cx, |chat, window, cx| {
+            chat.move_side_pane_to_tab(window, cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            tab_count(cx),
+            2,
+            "moving to a tab twice reuses the subagent tab"
+        );
+        assert!(chat.read_with(cx, |chat, _| chat.side_pane_content().is_none()));
+        let subagent_view = workspace
+            .read_with(cx, |workspace, cx| {
+                workspace
+                    .items_of_type::<ChatView>(cx)
+                    .find(|view| view.read(cx).is_subagent())
+            })
             .expect("subagent tab");
         subagent_view.read_with(cx, |view, cx| {
             assert_eq!(view.title(cx), "scan the repo");
@@ -3609,6 +3695,56 @@ mod tests {
         assert_eq!(matches(&view, cx), ["main.rs"]);
         cx.simulate_keystrokes("enter");
         assert_eq!(composer_text(&view, cx), "look at @src/main.rs ");
+    }
+
+    #[gpui::test]
+    async fn file_links_open_read_only_in_the_side_pane(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/proj",
+            serde_json::json!({ "src": { "main.rs": "fn main() {}\n" } }),
+        )
+        .await;
+        let project = project::Project::test(fs, [std::path::Path::new("/proj")], cx).await;
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, "/proj".into(), cx)
+        });
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            ChatView::new(
+                session.clone(),
+                store.clone(),
+                project,
+                WeakEntity::new_invalid(),
+                window,
+                cx,
+            )
+        });
+        let target = links::FileTarget {
+            path: "/proj/src/main.rs".into(),
+            line: Some(1),
+        };
+        view.update_in(cx, |view, window, cx| {
+            view.open_file_in_side_pane(target, window, cx)
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, cx| {
+            let Some(side_pane::SidePaneContent::File { editor, .. }) = view.side_pane_content()
+            else {
+                panic!("expected the file in the side pane");
+            };
+            let editor = editor.read(cx);
+            assert!(editor.read_only(cx));
+            assert_eq!(editor.text(cx), "fn main() {}\n");
+        });
+        view.update_in(cx, |view, window, cx| view.close_side_pane(window, cx));
+        assert!(view.read_with(cx, |view, _| view.side_pane_content().is_none()));
     }
 
     #[gpui::test]

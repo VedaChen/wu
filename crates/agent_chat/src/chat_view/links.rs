@@ -226,6 +226,20 @@ impl ChatView {
     }
 
     fn open_file(&mut self, target: FileTarget, window: &mut Window, cx: &mut Context<Self>) {
+        match self.host.as_ref().and_then(|host| host.upgrade()) {
+            Some(host) => host.update(cx, |host, cx| {
+                host.open_file_in_side_pane(target, window, cx)
+            }),
+            None => self.open_file_in_side_pane(target, window, cx),
+        }
+    }
+
+    pub(super) fn open_file_in_tab(
+        &mut self,
+        target: FileTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
@@ -271,10 +285,21 @@ impl ChatView {
             Some(target) => {
                 let path = target.path.clone();
                 let open_view = view.clone();
-                let open_target = target;
+                let open_target = target.clone();
+                let tab_view = view.clone();
+                let tab_target = target;
                 menu.entry("Open", None, move |window, cx| {
                     open_view
-                        .update(cx, |this, cx| this.open_file(open_target.clone(), window, cx))
+                        .update(cx, |this, cx| {
+                            this.open_file(open_target.clone(), window, cx)
+                        })
+                        .log_err();
+                })
+                .entry("Open in Tab", None, move |window, cx| {
+                    tab_view
+                        .update(cx, |this, cx| {
+                            this.open_file_in_tab(tab_target.clone(), window, cx)
+                        })
                         .log_err();
                 })
                 .entry("Open with Default App", None, {

@@ -4704,7 +4704,7 @@ impl EditorElement {
     fn paint_background(&self, layout: &EditorLayout, window: &mut Window, cx: &mut App) {
         window.paint_layer(layout.hitbox.bounds, |window| {
             let scroll_top = layout.position_map.scroll_position.y;
-            let gutter_bg = cx.theme().colors().editor_gutter_background;
+            let gutter_bg = self.editor.read(cx).gutter_background(cx);
             window.paint_quad(fill(layout.gutter_hitbox.bounds, gutter_bg));
             window.paint_quad(fill(
                 layout.position_map.text_hitbox.bounds,

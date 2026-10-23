@@ -7,6 +7,10 @@ release body.
 
 ## Unreleased
 
+- Changing the permission mode now applies to the turn immediately instead of on the next message.
+- Fixed long permission prompts pushing the Allow and Deny buttons off screen.
+- Subagents and files referred in agent chats now open in a side pane instead of a new tab.
+
 ## 1.1.8 - 2026-10-20
 
 - Fixed "Dock Right" not moving the agent panel.

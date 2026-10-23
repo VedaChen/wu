@@ -75,6 +75,7 @@ fn controls(
         }),
         steering: steer_rx,
         interrupt: token.clone(),
+        permission: tokio::sync::watch::channel(agent_harness::PermissionMode::Ask).1,
     };
     (controls, steer_tx, token)
 }
@@ -91,6 +92,33 @@ async fn run_to_end(
     )
     .await
     .expect("run finished in time")
+}
+
+#[tokio::test]
+async fn permission_changes_reach_a_running_turn() {
+    let (mut controls, _steer, _token) = controls("Deny");
+    let (permission_tx, permission_rx) = tokio::sync::watch::channel(PermissionMode::Ask);
+    controls.permission = permission_rx;
+    let mut req = request("scenario:mode-change");
+    req.permission = PermissionMode::Ask;
+    let stream = harness().run(req, controls).await.expect("run starts");
+    permission_tx.send_replace(PermissionMode::FullAccess);
+    let events = tokio::time::timeout(
+        Duration::from_secs(10),
+        stream.map(|r| r.expect("stream event")).collect::<Vec<_>>(),
+    )
+    .await
+    .expect("run finished in time");
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            AgentEvent::Done {
+                status: DoneStatus::Completed,
+                ..
+            }
+        )),
+        "{events:?}"
+    );
 }
 
 #[tokio::test]
@@ -289,6 +317,7 @@ async fn ask_user_question_round_trips_through_the_control_channel() {
         }),
         steering: steer_rx,
         interrupt: token.clone(),
+        permission: tokio::sync::watch::channel(agent_harness::PermissionMode::Ask).1,
     };
     let events = run_to_end(&harness(), request("scenario:askuser"), controls).await;
 
@@ -774,6 +803,7 @@ fn permission_controls(
         }),
         steering: steer_rx,
         interrupt: CancellationToken::new(),
+        permission: tokio::sync::watch::channel(agent_harness::PermissionMode::Ask).1,
     };
     (controls, steer_tx)
 }

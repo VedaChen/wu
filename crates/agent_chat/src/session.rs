@@ -685,6 +685,18 @@ impl PendingQuestion {
             .unwrap_or_default()
     }
 
+    /// A tool permission request from the harness, not an agent question that happens to look like one.
+    fn is_tool_permission(&self) -> bool {
+        self.is_permission()
+            && self.questions.iter().all(|question| {
+                question.options
+                    == [
+                        agent_harness::claude::PERMISSION_ALLOW,
+                        agent_harness::claude::PERMISSION_DENY,
+                    ]
+            })
+    }
+
     pub fn is_permission(&self) -> bool {
         !self.questions.is_empty()
             && self
@@ -706,6 +718,7 @@ enum RunInput {
 struct ActiveRun {
     steering: tokio::sync::mpsc::Sender<SteerMessage>,
     interrupt: CancellationToken,
+    permission: tokio::sync::watch::Sender<PermissionMode>,
     _events: Task<()>,
 }
 
@@ -949,6 +962,10 @@ impl AgentSession {
         change(&mut self.metadata.settings);
         if self.metadata.settings == before {
             return false;
+        }
+        let permission = self.metadata.settings.permission;
+        if permission != before.permission {
+            self.apply_permission_now(permission, cx);
         }
         self.restart_on_next_send = self.run.is_some();
         self.save_metadata(cx);
@@ -1212,6 +1229,40 @@ impl AgentSession {
         cx.notify();
     }
 
+    fn apply_permission_now(&mut self, permission: PermissionMode, cx: &mut Context<Self>) {
+        if let Some(run) = &self.run {
+            run.permission.send_replace(permission);
+        }
+        if self.skips_prompts() {
+            let waiting: Vec<String> = self
+                .pending_questions
+                .iter()
+                .filter(|pending| pending.is_tool_permission())
+                .map(|pending| pending.id().to_string())
+                .collect();
+            for id in waiting {
+                self.answer_permission(&id, true, cx);
+            }
+        } else if self.working && self.kind() != AgentKind::Claude {
+            self.push_notice(
+                format!(
+                    "{} keeps its current limits until this turn ends, then uses the new permission mode.",
+                    self.kind().label()
+                ),
+                false,
+                cx,
+            );
+        }
+    }
+
+    fn skips_prompts(&self) -> bool {
+        self.metadata
+            .settings
+            .permission
+            .for_harness(self.kind().harness_id())
+            .skips_prompts()
+    }
+
     pub fn answer_permission(&mut self, id: &str, allow: bool, cx: &mut Context<Self>) {
         let Some(pending) = self
             .pending_questions
@@ -1284,6 +1335,7 @@ impl AgentSession {
         };
         let (steering_tx, steering_rx) = tokio::sync::mpsc::channel(32);
         let interrupt = CancellationToken::new();
+        let (permission_tx, permission_rx) = tokio::sync::watch::channel(settings.permission);
         let (question_tx, question_rx) = futures::channel::mpsc::unbounded::<(
             Vec<UserInputQuestion>,
             tokio::sync::oneshot::Sender<Vec<UserInputAnswer>>,
@@ -1298,6 +1350,7 @@ impl AgentSession {
             }),
             steering: steering_rx,
             interrupt: interrupt.clone(),
+            permission: permission_rx,
         };
 
         let run = spawn_agent_work(cx, async move { harness.run(request, controls).await });
@@ -1346,6 +1399,7 @@ impl AgentSession {
         self.run = Some(ActiveRun {
             steering: steering_tx,
             interrupt,
+            permission: permission_tx,
             _events: events,
         });
         cx.notify();
@@ -1449,7 +1503,14 @@ impl AgentSession {
             questions,
             responder: Some(responder),
         };
+        // The harness may have asked just before the switch to a mode that skips prompts.
+        let approve = pending.is_tool_permission() && self.skips_prompts();
+        let id = pending.id().to_string();
         self.pending_questions.push(pending);
+        if approve {
+            self.answer_permission(&id, true, cx);
+            return;
+        }
         cx.emit(SessionEvent::NeedsInput);
         cx.notify();
     }
@@ -3342,6 +3403,55 @@ pub(crate) mod tests {
         });
     }
 
+    #[test]
+    fn only_allow_or_deny_permission_requests_count_as_tool_permissions() {
+        let question = |options: &[&str]| PendingQuestion {
+            questions: vec![UserInputQuestion {
+                id: "q".into(),
+                header: agent_harness::claude::PERMISSION_HEADER.into(),
+                question: "Proceed?".into(),
+                options: options.iter().map(|option| option.to_string()).collect(),
+                multi_select: false,
+                prefill: None,
+                multiline: false,
+            }],
+            responder: None,
+        };
+        assert!(question(&["Allow", "Deny"]).is_tool_permission());
+        assert!(!question(&["Yes", "No"]).is_tool_permission());
+    }
+
+    #[gpui::test]
+    async fn switching_to_full_access_approves_a_waiting_permission(cx: &mut TestAppContext) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+        });
+        session.update(cx, |session, cx| {
+            session.send_message("scenario:askuser", cx)
+        });
+        run_until(cx, |cx| {
+            session.read_with(cx, |session, _| !session.pending_questions().is_empty())
+        });
+
+        session.update(cx, |session, cx| {
+            session.update_settings(
+                |settings| settings.permission = PermissionMode::FullAccess,
+                cx,
+            )
+        });
+
+        run_until(cx, |cx| {
+            session.read_with(cx, |session, _| {
+                session
+                    .pending_questions()
+                    .first()
+                    .is_some_and(|pending| !pending.is_permission())
+            })
+        });
+    }
+
     #[gpui::test]
     async fn picked_settings_become_the_default_for_new_chats(cx: &mut TestAppContext) {
         let directory = tempfile::tempdir().expect("temporary directory");
@@ -4121,6 +4231,7 @@ done
             session.run = Some(ActiveRun {
                 steering,
                 interrupt: CancellationToken::new(),
+                permission: tokio::sync::watch::channel(PermissionMode::Ask).0,
                 _events: Task::ready(()),
             });
             for event in [

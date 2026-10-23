@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 pub use tokio_util::sync::CancellationToken;
 
 pub use proto::*;
@@ -33,6 +33,8 @@ pub struct RunControls {
     >,
     pub steering: mpsc::Receiver<SteerMessage>,
     pub interrupt: CancellationToken,
+    /// Permission mode changes made while the run is going.
+    pub permission: watch::Receiver<PermissionMode>,
 }
 
 #[derive(Clone, Debug)]

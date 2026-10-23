@@ -873,17 +873,21 @@ async fn run_session(session: Session) {
         request_input,
         mut steering,
         interrupt,
+        permission: mut permission_changes,
     } = controls;
     let request_input = Arc::new(request_input);
 
-    let permission = request.permission.for_harness(HarnessId::Codex);
-    let sandbox = permission_sandbox(permission);
-    let approval_policy = if permission.skips_prompts() {
-        "never"
-    } else {
-        "on-request"
+    let mut permission = request.permission.for_harness(HarnessId::Codex);
+    let mut permission_open = true;
+    let approval_policy = |permission: PermissionMode| {
+        if permission.skips_prompts() {
+            "never"
+        } else {
+            "on-request"
+        }
     };
     let approvals_reviewer = (permission == PermissionMode::ApproveForMe).then_some("auto_review");
+    let started_with_reviewer = approvals_reviewer.is_some();
     let effort = to_effort(request.reasoning);
     let service_tier = request
         .model_options
@@ -895,11 +899,14 @@ async fn run_session(session: Session) {
     let start_params = {
         let mut p = serde_json::Map::new();
         p.insert("cwd".into(), Value::String(request.cwd.clone()));
-        p.insert("approvalPolicy".into(), approval_policy.into());
+        p.insert("approvalPolicy".into(), approval_policy(permission).into());
         if let Some(reviewer) = approvals_reviewer {
             p.insert("approvalsReviewer".into(), reviewer.into());
         }
-        p.insert("sandbox".into(), sandbox_mode(sandbox).into());
+        p.insert(
+            "sandbox".into(),
+            sandbox_mode(permission_sandbox(permission)).into(),
+        );
         if let Some(model) = &request.model {
             p.insert("model".into(), Value::String(model.clone()));
         }
@@ -991,12 +998,28 @@ async fn run_session(session: Session) {
         }
     };
 
-    let turn_params = |text: &str, attachments: &[String], skills: &[SkillRef]| -> Value {
+    let turn_params = |permission: PermissionMode,
+                       text: &str,
+                       attachments: &[String],
+                       skills: &[SkillRef]|
+     -> Value {
         let mut p = serde_json::Map::new();
         p.insert("threadId".into(), Value::String(thread_id.clone()));
         p.insert("input".into(), prompt_input(text, attachments, skills));
-        p.insert("approvalPolicy".into(), approval_policy.into());
-        p.insert("sandboxPolicy".into(), sandbox_policy_value(sandbox));
+        p.insert("approvalPolicy".into(), approval_policy(permission).into());
+        p.insert(
+            "sandboxPolicy".into(),
+            sandbox_policy_value(permission_sandbox(permission)),
+        );
+        let approve_for_me = permission == PermissionMode::ApproveForMe;
+        if approve_for_me || started_with_reviewer {
+            let reviewer = if approve_for_me {
+                "auto_review"
+            } else {
+                "user"
+            };
+            p.insert("approvalsReviewer".into(), reviewer.into());
+        }
         // Without this Codex streams no reasoning summaries and looks idle for minutes.
         p.insert("summary".into(), "auto".into());
         if let Some(model) = &request.model {
@@ -1032,7 +1055,12 @@ async fn run_session(session: Session) {
     let mut router = TurnRouter::default();
     match start_turn(
         &client,
-        turn_params(&request.prompt, &request.attachments, &request.skills),
+        turn_params(
+            permission,
+            &request.prompt,
+            &request.attachments,
+            &request.skills,
+        ),
     )
     .await
     {
@@ -1255,7 +1283,7 @@ async fn run_session(session: Session) {
                             current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
                             if !steer_as_new_turn(
                                 &client,
-                                turn_params(&msg.prompt, &msg.attachments, &msg.skills),
+                                turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills),
                                 &mut router,
                                 &event_tx,
                                 &mut assistant_message_id,
@@ -1391,7 +1419,7 @@ async fn run_session(session: Session) {
                                 } else {
                                     current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
                                     if !steer_as_new_turn(
-                                        &client, turn_params(&msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
+                                        &client, turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
                                         &mut assistant_message_id, &mut done_current,
                                     ).await { break 'main; }
                                 }
@@ -1400,7 +1428,7 @@ async fn run_session(session: Session) {
                     } else {
                         current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
                         if !steer_as_new_turn(
-                            &client, turn_params(&msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
+                            &client, turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
                             &mut assistant_message_id, &mut done_current,
                         ).await { break 'main; }
                     }
@@ -1411,6 +1439,13 @@ async fn run_session(session: Session) {
                         break 'main;
                     }
                 }
+            },
+
+            changed = permission_changes.changed(), if permission_open => match changed {
+                Ok(()) => {
+                    permission = permission_changes.borrow_and_update().for_harness(HarnessId::Codex);
+                }
+                Err(_) => permission_open = false,
             },
 
             _ = interrupt.cancelled(), if !interrupt_sent => {

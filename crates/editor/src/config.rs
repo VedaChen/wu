@@ -111,6 +111,20 @@ impl Editor {
         cx.notify();
     }
 
+    pub fn set_gutter_matches_text_background(&mut self, matches: bool, cx: &mut Context<Self>) {
+        self.gutter_matches_text_background = matches;
+        cx.notify();
+    }
+
+    pub(crate) fn gutter_background(&self, cx: &App) -> Hsla {
+        let colors = cx.theme().colors();
+        if self.gutter_matches_text_background {
+            colors.editor_background
+        } else {
+            colors.editor_gutter_background
+        }
+    }
+
     pub fn set_show_vertical_scrollbar(&mut self, show: bool, cx: &mut Context<Self>) {
         self.show_scrollbars.vertical = show;
         cx.notify();

@@ -306,7 +306,7 @@ impl EditorElement {
 
         Some(StickyHeaders {
             lines,
-            gutter_background: cx.theme().colors().editor_gutter_background,
+            gutter_background: self.editor.read(cx).gutter_background(cx),
             content_background: self.style.background,
             gutter_right_padding: gutter_dimensions.right_padding,
         })

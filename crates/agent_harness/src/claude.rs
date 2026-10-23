@@ -823,8 +823,12 @@ async fn run_session(session: Session) {
         request_input,
         mut steering,
         interrupt,
+        mut permission,
     } = controls;
     let request_input = Arc::new(request_input);
+    let launched_bypass = skip_prompts;
+    let mut skip_prompts = skip_prompts;
+    let mut permission_open = true;
 
     let mut pending_steers = std::collections::VecDeque::new();
     let mut open_tools = HashSet::new();
@@ -848,6 +852,13 @@ async fn run_session(session: Session) {
                     }
                     if let Some((_, deadline)) = held_done.as_mut() {
                         *deadline = tokio::time::Instant::now() + HELD_DONE_SETTLE;
+                    }
+                    if let Some(error) = wire::control_error(line, SET_MODE_REQUEST_PREFIX) {
+                        let message = format!(
+                            "Claude Code couldn't switch the permission mode right away, so the new mode applies from your next message. {error}"
+                        );
+                        if event_tx.send(Ok(AgentEvent::Error { message })).await.is_err() { break 'main; }
+                        continue;
                     }
                     let frame = match wire::parse_frame(line) {
                         Ok(frame) => frame,
@@ -951,6 +962,17 @@ async fn run_session(session: Session) {
                 }
             },
 
+            changed = permission.changed(), if permission_open && !interrupted => match changed {
+                Ok(()) => {
+                    let mode = *permission.borrow_and_update();
+                    skip_prompts = mode.skips_prompts();
+                    let id = format!("{SET_MODE_REQUEST_PREFIX}{}", uuid::Uuid::new_v4());
+                    let line = wire::set_permission_mode_line(&id, live_permission_mode_name(mode, launched_bypass));
+                    if stdin_tx.send(StdinMsg::Line(line)).is_err() { break 'main; }
+                }
+                Err(_) => permission_open = false,
+            },
+
             _ = interrupt.cancelled(), if !interrupt_sent => {
                 interrupt_sent = true;
                 interrupted = true;
@@ -1030,6 +1052,26 @@ type RequestInputFn = Box<
         + Send
         + Sync,
 >;
+
+const SET_MODE_REQUEST_PREFIX: &str = "wu-set-mode-";
+
+/// Claude refuses `bypassPermissions` unless launched in it, so it asks instead and Wu approves.
+fn live_permission_mode_name(permission: PermissionMode, launched_bypass: bool) -> &'static str {
+    match permission_mode_name(permission) {
+        "bypassPermissions" if !launched_bypass => "default",
+        name => name,
+    }
+}
+
+fn permission_mode_name(permission: PermissionMode) -> &'static str {
+    match permission.for_harness(HarnessId::ClaudeCode) {
+        PermissionMode::Ask => "default",
+        PermissionMode::AcceptEdits => "acceptEdits",
+        PermissionMode::DontAsk => "dontAsk",
+        PermissionMode::FullAccess => "bypassPermissions",
+        PermissionMode::Auto | PermissionMode::ReadOnly | PermissionMode::ApproveForMe => "auto",
+    }
+}
 
 fn permission_args(permission: PermissionMode) -> &'static [&'static str] {
     match permission.for_harness(HarnessId::ClaudeCode) {
@@ -1530,6 +1572,33 @@ mod tests {
             permission_args(PermissionMode::ReadOnly),
             ["--permission-mode", "auto"],
             "Codex-only modes fall back to auto"
+        );
+    }
+
+    #[test]
+    fn live_mode_changes_match_the_launch_flags() {
+        for mode in [
+            PermissionMode::Auto,
+            PermissionMode::Ask,
+            PermissionMode::AcceptEdits,
+            PermissionMode::DontAsk,
+            PermissionMode::FullAccess,
+            PermissionMode::ReadOnly,
+            PermissionMode::ApproveForMe,
+        ] {
+            assert_eq!(
+                permission_args(mode)[1],
+                permission_mode_name(mode),
+                "{mode:?}"
+            );
+        }
+        assert_eq!(
+            live_permission_mode_name(PermissionMode::FullAccess, true),
+            "bypassPermissions"
+        );
+        assert_eq!(
+            live_permission_mode_name(PermissionMode::FullAccess, false),
+            "default"
         );
     }
 

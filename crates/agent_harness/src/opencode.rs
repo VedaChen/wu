@@ -763,7 +763,7 @@ async fn run_session(session: Session) {
         event_tx,
         controls,
         request,
-        permission,
+        mut permission,
         interrupt_grace,
         kill_grace,
         known_commands,
@@ -773,7 +773,9 @@ async fn run_session(session: Session) {
         request_input,
         mut steering,
         interrupt,
+        permission: mut permission_changes,
     } = controls;
+    let mut permission_open = true;
     let request_input = Arc::new(request_input);
     let directory = (!request.cwd.is_empty()).then(|| request.cwd.clone());
     let dir = directory.as_deref();
@@ -1278,6 +1280,13 @@ async fn run_session(session: Session) {
             biased;
 
             _ = event_tx.closed() => break 'main,
+
+            changed = permission_changes.changed(), if permission_open => match changed {
+                Ok(()) => {
+                    permission = permission_changes.borrow_and_update().for_harness(HarnessId::Opencode);
+                }
+                Err(_) => permission_open = false,
+            },
 
             _ = interrupt.cancelled(), if !interrupt_requested => {
                 interrupt_requested = true;

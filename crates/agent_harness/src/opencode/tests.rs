@@ -118,6 +118,7 @@ struct TurnWire {
     events: mpsc::Receiver<Result<AgentEvent, HarnessError>>,
     interrupt: tokio_util::sync::CancellationToken,
     steering: Option<mpsc::Sender<crate::SteerMessage>>,
+    _permission: tokio::sync::watch::Sender<crate::PermissionMode>,
     polls: Arc<std::sync::atomic::AtomicUsize>,
     command_failure_release: Option<tokio::sync::oneshot::Sender<()>>,
     server: tokio::task::JoinHandle<()>,
@@ -383,6 +384,8 @@ impl TurnWire {
             .unwrap_or(false)
             .then_some(steer_tx);
         let interrupt = tokio_util::sync::CancellationToken::new();
+        let (permission_tx, permission_rx) =
+            tokio::sync::watch::channel(crate::PermissionMode::Ask);
         let mut request = json!({
             "prompt": if native_command_reply.is_some() { "/project-review" } else { "first" },
             "cwd": "",
@@ -433,6 +436,7 @@ impl TurnWire {
                 }),
                 steering,
                 interrupt: interrupt.clone(),
+                permission: permission_rx,
             },
             permission: request.permission.for_harness(HarnessId::Opencode),
             request,
@@ -448,6 +452,7 @@ impl TurnWire {
             events,
             interrupt,
             steering: retained_steering,
+            _permission: permission_tx,
             polls,
             command_failure_release: matches!(
                 native_command_reply,
@@ -3016,6 +3021,7 @@ async fn stop_during_boot_ends_the_run_and_kills_the_server() {
                 request_input: Box::new(|_| tokio::sync::oneshot::channel().1),
                 steering,
                 interrupt: interrupt.clone(),
+                permission: tokio::sync::watch::channel(crate::PermissionMode::Ask).1,
             },
         ),
     )
@@ -3076,6 +3082,7 @@ async fn a_missing_project_folder_is_reported_as_such() {
                 request_input: Box::new(|_| tokio::sync::oneshot::channel().1),
                 steering,
                 interrupt: tokio_util::sync::CancellationToken::new(),
+                permission: tokio::sync::watch::channel(crate::PermissionMode::Ask).1,
             },
         )
         .await
