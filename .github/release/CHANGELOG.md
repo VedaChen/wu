@@ -7,6 +7,7 @@ release body.
 
 ## Unreleased
 
+- Images can now be dragged onto Wu's Dock icon and dropped into one of its windows.
 - Changing the permission mode now applies to the turn immediately instead of on the next message.
 - Fixed long permission prompts pushing the Allow and Deny buttons off screen.
 - Subagents and files referred in agent chats now open in a side pane instead of a new tab.

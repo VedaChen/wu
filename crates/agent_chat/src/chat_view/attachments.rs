@@ -1,5 +1,5 @@
 use super::{ChatView, ui};
-use crate::chat_style::{hairline, icon, page};
+use crate::chat_style::{hairline, icon};
 use anyhow::{Context as _, Result, bail};
 use gpui::{
     ClipboardEntry, Context, ExternalPaths, Image, ImageFormat, IntoElement, ObjectFit,
@@ -17,8 +17,7 @@ const THUMBNAIL_SIZE: f32 = 56.;
 const STRIP_GAP: f32 = 8.;
 const STRIP_PAD_TOP: f32 = 12.;
 const STRIP_PAD_X: f32 = 16.;
-const CLOSE_CIRCLE_DIAMETER: f32 = 11.5;
-const CLOSE_CIRCLE_GLYPH: f32 = 7.;
+const CLOSE_GLYPH: f32 = 10.;
 const REMOVE_OVERHANG: f32 = 6.;
 
 pub(crate) fn is_image_path(path: &Path) -> bool {
@@ -294,8 +293,6 @@ impl ChatView {
         }
         let colors = cx.theme().colors();
         let frame = hairline(0.10, cx);
-        let plate = page(cx);
-        let muted = colors.text_muted;
         Some(
             v_flex()
                 .w_full()
@@ -349,26 +346,16 @@ impl ChatView {
                                         .items_center()
                                         .justify_center()
                                         .rounded_full()
-                                        .bg(plate)
+                                        .bg(colors.background.alpha(1.0))
                                         .shadow_sm()
                                         .cursor_pointer()
                                         .visible_on_hover(group)
                                         .tooltip(Tooltip::text("Remove"))
-                                        .child(
-                                            div()
-                                                .size(px(CLOSE_CIRCLE_DIAMETER))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .rounded_full()
-                                                .border_1()
-                                                .border_color(muted)
-                                                .child(icon(
-                                                    IconName::AgentClose,
-                                                    px(CLOSE_CIRCLE_GLYPH),
-                                                    muted,
-                                                )),
-                                        )
+                                        .child(icon(
+                                            IconName::AgentClose,
+                                            px(CLOSE_GLYPH),
+                                            colors.text_muted,
+                                        ))
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             cx.stop_propagation();
                                             if index < this.attachments.len() {

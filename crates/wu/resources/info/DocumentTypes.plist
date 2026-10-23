@@ -16,6 +16,18 @@
         </array>
     </dict>
     <dict>
+        <key>CFBundleTypeName</key>
+        <string>Image</string>
+        <key>CFBundleTypeRole</key>
+        <string>Viewer</string>
+        <key>LSHandlerRank</key>
+        <string>None</string>
+        <key>LSItemContentTypes</key>
+        <array>
+            <string>public.image</string>
+        </array>
+    </dict>
+    <dict>
         <key>CFBundleTypeIconFile</key>
         <string>Document</string>
         <key>CFBundleTypeName</key>
