@@ -520,6 +520,9 @@ impl Harness for OpencodeHarness {
     fn executable_path(&self) -> Option<PathBuf> {
         self.resolve_executable().ok()
     }
+    fn update_args(&self) -> &'static [&'static str] {
+        &["upgrade", "latest"]
+    }
     fn model_context(&self) -> Result<Option<crate::ModelContext>, HarnessError> {
         self.discovery_context().map(Some)
     }

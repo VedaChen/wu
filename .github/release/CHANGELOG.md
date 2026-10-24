@@ -7,10 +7,12 @@ release body.
 
 ## Unreleased
 
-- Agent chats are restored on restart.
+- Agent CLIs are now kept up to date by Wu.
+- Agent chats are now restored on restart.
 - Typing `@` in an agent chat now lists project's files right away.
+- Typing `$` in a Claude Code chat now lists skills instead of only listing them on `/`.
 - Files, commands and skills picked from the chat box menus show up as badges.
-- Typing `$` in a Claude Code chat now lists skills.
+- Removed the checkout and branch picker from under the agent chat input.
 
 ## 1.1.9 - 2026-10-24
 

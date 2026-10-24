@@ -2092,6 +2092,23 @@ pub struct AgentStore {
     metadata_writes: HashMap<String, Task<()>>,
     save_defaults_task: Task<()>,
     load_task: Option<Shared<Task<()>>>,
+    agent_updates: HashMap<AgentKind, AgentUpdate>,
+}
+
+#[derive(Clone)]
+pub enum AgentUpdateStatus {
+    Updating,
+    Finished(SharedString),
+    Failed {
+        message: SharedString,
+        reason: SharedString,
+    },
+}
+
+struct AgentUpdate {
+    status: Option<AgentUpdateStatus>,
+    checked_at: Instant,
+    _task: Task<()>,
 }
 
 #[derive(Default)]
@@ -2151,6 +2168,47 @@ pub struct PlanUsageState {
 
 fn defaults_path(directory: &Path) -> PathBuf {
     directory.join("defaults.json")
+}
+
+const AGENT_UPDATE_INTERVAL: Duration = Duration::from_secs(12 * 60 * 60);
+const AGENT_UPDATE_STATUS_SHOWN_FOR: Duration = Duration::from_secs(10);
+
+fn agent_updates_path(directory: &Path) -> PathBuf {
+    directory.join("agent_updates.json")
+}
+
+/// Recorded before updating, so an update that never finishes isn't retried on every new chat.
+fn claim_update_attempt(path: &Path, kind: AgentKind) -> bool {
+    static ATTEMPTS_FILE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _locked = ATTEMPTS_FILE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs());
+    let mut attempts: HashMap<AgentKind, u64> = std::fs::read(path)
+        .ok()
+        .and_then(|json| serde_json::from_slice(&json).log_err())
+        .unwrap_or_default();
+    if attempts
+        .get(&kind)
+        .is_some_and(|last| now.saturating_sub(*last) < AGENT_UPDATE_INTERVAL.as_secs())
+    {
+        return false;
+    }
+    attempts.insert(kind, now);
+    let saved = serde_json::to_vec(&attempts)
+        .map_err(anyhow::Error::from)
+        .and_then(|json| {
+            if let Some(directory) = path.parent() {
+                std::fs::create_dir_all(directory)?;
+            }
+            Ok(std::fs::write(path, json)?)
+        });
+    if let Err(error) = saved {
+        log::warn!("couldn't record the agent update attempt: {error}");
+    }
+    true
 }
 
 /// The effort to switch to when the model doesn't offer the chat's, so what's sent matches the picker.
@@ -2252,6 +2310,7 @@ impl AgentStore {
             metadata_writes: HashMap::default(),
             save_defaults_task: Task::ready(()),
             load_task: None,
+            agent_updates: HashMap::default(),
         };
         if AgentChatSettings::get_global(cx).enabled {
             store.load_saved_chats(cx);
@@ -2592,6 +2651,94 @@ impl AgentStore {
             state._activation = Some(task);
         }
         cx.notify();
+    }
+
+    pub fn agent_update(&self, kind: AgentKind) -> Option<&AgentUpdateStatus> {
+        self.agent_updates.get(&kind)?.status.as_ref()
+    }
+
+    pub fn update_agent_if_due(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
+        if self
+            .agent_updates
+            .get(&kind)
+            .is_some_and(|update| update.checked_at.elapsed() < AGENT_UPDATE_INTERVAL)
+        {
+            return;
+        }
+        let harness = self.harness(kind);
+        let attempts = agent_updates_path(&self.directory);
+        let claim = spawn_agent_work(cx, {
+            let harness = harness.clone();
+            async move {
+                let args = harness.update_args();
+                let executable = harness.executable_path().filter(|_| !args.is_empty())?;
+                claim_update_attempt(&attempts, kind).then_some((executable, args))
+            }
+        });
+        let task = cx.spawn(async move |this, cx| {
+            let Ok(Some((executable, args))) = claim.await else {
+                return;
+            };
+            let Some(run) = this
+                .update(cx, |this, cx| {
+                    this.set_agent_update(kind, Some(AgentUpdateStatus::Updating), cx);
+                    spawn_agent_work(
+                        cx,
+                        agent_harness::update::update_cli(executable, args, move || {
+                            harness.executable_path()
+                        }),
+                    )
+                })
+                .log_err()
+            else {
+                return;
+            };
+            let label = kind.label();
+            let failed = |reason: String| AgentUpdateStatus::Failed {
+                message: format!("Couldn't update {label}").into(),
+                reason: reason.into(),
+            };
+            let status = match run.await {
+                Ok(Ok(agent_harness::update::UpdateOutcome::Updated(Some(version)))) => {
+                    AgentUpdateStatus::Finished(format!("{label} updated to {version}").into())
+                }
+                Ok(Ok(agent_harness::update::UpdateOutcome::Updated(None))) => {
+                    AgentUpdateStatus::Finished(format!("{label} updated").into())
+                }
+                Ok(Ok(agent_harness::update::UpdateOutcome::UpToDate)) => {
+                    AgentUpdateStatus::Finished(format!("{label} is up to date").into())
+                }
+                Ok(Err(error)) => failed(error.0),
+                Err(error) => failed(error.to_string()),
+            };
+            this.update(cx, |this, cx| this.set_agent_update(kind, Some(status), cx))
+                .log_err();
+            cx.background_executor()
+                .timer(AGENT_UPDATE_STATUS_SHOWN_FOR)
+                .await;
+            this.update(cx, |this, cx| this.set_agent_update(kind, None, cx))
+                .log_err();
+        });
+        self.agent_updates.insert(
+            kind,
+            AgentUpdate {
+                status: None,
+                checked_at: Instant::now(),
+                _task: task,
+            },
+        );
+    }
+
+    fn set_agent_update(
+        &mut self,
+        kind: AgentKind,
+        status: Option<AgentUpdateStatus>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(update) = self.agent_updates.get_mut(&kind) {
+            update.status = status;
+            cx.notify();
+        }
     }
 
     pub fn plan_usage(&self, kind: AgentKind) -> Option<&PlanUsageState> {
@@ -3275,6 +3422,25 @@ pub(crate) mod tests {
         reopened.update(cx, |store, cx| store.load_saved_chats(cx));
         cx.run_until_parked();
         assert_eq!(saved(cx), 1);
+    }
+
+    #[test]
+    fn each_agent_is_updated_at_most_once_per_interval() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let attempts = agent_updates_path(&directory.path().join("missing"));
+        assert!(claim_update_attempt(&attempts, AgentKind::Claude));
+        assert!(!claim_update_attempt(&attempts, AgentKind::Claude));
+        assert!(claim_update_attempt(&attempts, AgentKind::Codex));
+
+        let interval_old = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock after 1970")
+            .as_secs()
+            - AGENT_UPDATE_INTERVAL.as_secs();
+        std::fs::write(&attempts, format!(r#"{{"claude":{interval_old}}}"#))
+            .expect("write attempts");
+        assert!(claim_update_attempt(&attempts, AgentKind::Claude));
+        assert!(!claim_update_attempt(&attempts, AgentKind::Claude));
     }
 
     #[gpui::test]

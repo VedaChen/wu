@@ -65,6 +65,9 @@ pub trait Harness: Send + Sync {
     fn executable_path(&self) -> Option<std::path::PathBuf> {
         None
     }
+    fn update_args(&self) -> &'static [&'static str] {
+        &[]
+    }
     async fn models(&self) -> Result<Vec<Model>, HarnessError>;
     fn model_context(&self) -> Result<Option<ModelContext>, HarnessError> {
         Ok(None)
@@ -123,6 +126,7 @@ mod model_context;
 pub mod opencode;
 pub mod process;
 mod proto;
+pub mod update;
 pub mod usage;
 pub mod view;
 

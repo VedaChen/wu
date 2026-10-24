@@ -151,6 +151,8 @@ fn open_chat_in(
     if !agent_chat_enabled(cx) {
         return;
     }
+    let kind = session.read(cx).kind();
+    store_for(workspace, cx).update(cx, |store, cx| store.update_agent_if_due(kind, cx));
     let existing = workspace.items_of_type::<ChatView>(cx).find(|view| {
         let view = view.read(cx);
         view.session() == &session && !view.is_subagent()

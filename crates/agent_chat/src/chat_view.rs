@@ -1,6 +1,5 @@
 mod attachments;
 mod background_tasks;
-mod checkout;
 mod completion;
 mod composer;
 mod dictation;
@@ -2558,7 +2557,7 @@ impl ChatView {
                         h_flex()
                             .h(px(24.))
                             .px(px(10.))
-                            .child(self.render_checkout_picker(cx)),
+                            .children(self.render_agent_update(cx)),
                     ),
             )
             .into_any_element()

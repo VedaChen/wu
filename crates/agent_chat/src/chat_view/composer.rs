@@ -2,6 +2,7 @@ use super::*;
 use crate::{
     AgentKind,
     chat_style::{composer_surface, icon, icon_size_px, tracked_upper},
+    session::AgentUpdateStatus,
 };
 
 const NEW_CHAT_TEXTAREA_MIN: f32 = 76.;
@@ -417,18 +418,6 @@ impl ChatView {
             .into_any_element()
     }
 
-    pub(super) fn branch_name(&self, cx: &App) -> Option<SharedString> {
-        let repository = self.project.read(cx).active_repository(cx)?;
-        let repository = repository.read(cx);
-        Some(
-            repository
-                .branch
-                .as_ref()
-                .map(|branch| SharedString::from(branch.name().to_string()))
-                .unwrap_or_else(|| "No ref".into()),
-        )
-    }
-
     pub(super) fn footer_label_shell(icon_name: IconName, cx: &App) -> gpui::Div {
         let color = cx.theme().colors().text_muted.opacity(0.6);
         h_flex()
@@ -442,40 +431,37 @@ impl ChatView {
             .child(icon(icon_name, px(12.), color))
     }
 
-    pub(super) fn footer_label(icon: IconName, label: SharedString, cx: &App) -> impl IntoElement {
-        Self::footer_label_shell(icon, cx)
-            .max_w(px(160.))
-            .child(div().min_w_0().truncate().child(label))
-    }
-
-    pub(super) fn render_checkout(&self, cx: &App) -> impl IntoElement {
-        let metadata = self.session.read(cx).metadata();
-        let label: SharedString = if metadata.project_root.is_some() {
-            "Worktree".into()
-        } else {
-            "Local checkout".into()
+    pub(super) fn render_agent_update(&self, cx: &App) -> Option<AnyElement> {
+        let kind = self.session.read(cx).kind();
+        let status = self.store.read(cx).agent_update(kind)?.clone();
+        let label = |icon_name: IconName, text: SharedString| {
+            Self::footer_label_shell(icon_name, cx)
+                .max_w(px(280.))
+                .child(div().min_w_0().truncate().child(text))
         };
-        let branch = metadata
-            .branch
-            .clone()
-            .map(SharedString::from)
-            .or_else(|| self.branch_name(cx));
-        h_flex()
-            .flex_1()
-            .min_w_0()
-            .pl(px(10.))
-            .gap(px(4.))
-            .when_some(branch, |this, branch| {
-                let folder = if metadata.project_root.is_some() {
-                    IconName::AgentFolderWithFiles
-                } else {
-                    IconName::AgentFolder
-                };
-                this.child(Self::footer_label(folder, label, cx)).child(
-                    Self::footer_label_shell(IconName::AgentGitBranch, cx)
-                        .child(div().min_w_0().truncate().child(branch)),
-                )
-            })
+        Some(match status {
+            AgentUpdateStatus::Updating => label(
+                IconName::AgentRestart,
+                format!("Updating {}…", kind.label()).into(),
+            )
+            .with_animation(
+                "agent-update-pulse",
+                Animation::new(Duration::from_millis(1400))
+                    .repeat()
+                    .with_easing(gpui::pulsating_between(0.5, 1.)),
+                |this, delta| this.opacity(delta),
+            )
+            .into_any_element(),
+            AgentUpdateStatus::Finished(message) => {
+                label(IconName::AgentCheck, message).into_any_element()
+            }
+            AgentUpdateStatus::Failed { message, reason } => {
+                label(IconName::AgentDangerTriangle, message)
+                    .id("agent-update-failed")
+                    .tooltip(Tooltip::text(reason))
+                    .into_any_element()
+            }
+        })
     }
 
     pub(super) fn render_footer(&self, cx: &Context<Self>) -> impl IntoElement {
@@ -495,7 +481,13 @@ impl ChatView {
         let ring_hover = ink(0.05, cx);
         h_flex()
             .h(px(24.))
-            .child(self.render_checkout(cx))
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .pl(px(10.))
+                    .children(self.render_agent_update(cx)),
+            )
             .children(self.render_background_indicator(cx))
             .child(
                 h_flex()

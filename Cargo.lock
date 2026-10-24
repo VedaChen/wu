@@ -164,7 +164,6 @@ dependencies = [
  "fs",
  "futures",
  "fuzzy_nucleo",
- "git",
  "gpui",
  "gpui_tokio",
  "http_client",

@@ -95,27 +95,6 @@ pub(crate) fn composer_surface(cx: &App) -> Hsla {
 
 pub(crate) const MENU_ITEM_RADIUS: f32 = 7.;
 
-pub(crate) fn menu_row(selected: bool, cx: &App) -> gpui::Div {
-    let text = cx.theme().colors().text;
-    let wash = selected_row(cx);
-    let row = div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(10.))
-        .px(px(8.))
-        .py(px(6.))
-        .rounded(px(MENU_ITEM_RADIUS))
-        .text_size(ui(13.))
-        .cursor_pointer();
-    if selected {
-        row.bg(wash).text_color(text)
-    } else {
-        row.text_color(text.opacity(0.9))
-            .hover(move |style| style.bg(wash).text_color(text))
-    }
-}
-
 pub(crate) fn tracked_upper(label: &str) -> String {
     let mut tracked = String::with_capacity(label.len() * 2);
     for (index, character) in label.to_uppercase().chars().enumerate() {
@@ -125,38 +104,6 @@ pub(crate) fn tracked_upper(label: &str) -> String {
         tracked.push(character);
     }
     tracked
-}
-
-pub(crate) fn menu_heading(label: &str, cx: &App) -> gpui::Div {
-    div()
-        .px(px(8.))
-        .pb(px(4.))
-        .pt(px(6.))
-        .text_size(ui(10.))
-        .font_weight(gpui::FontWeight::MEDIUM)
-        .text_color(cx.theme().colors().text_muted)
-        .child(SharedString::from(tracked_upper(label)))
-}
-
-pub(crate) fn menu_section(cx: &App) -> gpui::Div {
-    div()
-        .mt(px(4.))
-        .pt(px(4.))
-        .border_t_1()
-        .border_color(hairline(0.06, cx))
-        .flex()
-        .flex_col()
-        .gap(px(2.))
-}
-
-pub(crate) fn search_input_frame(cx: &App) -> gpui::Div {
-    div()
-        .mb(px(4.))
-        .px(px(10.))
-        .py(px(6.))
-        .rounded(px(MENU_ITEM_RADIUS))
-        .bg(ink(0.04, cx))
-        .text_size(ui(13.))
 }
 
 pub(crate) fn popover_card(cx: &App) -> gpui::Div {

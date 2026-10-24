@@ -553,6 +553,9 @@ impl Harness for ClaudeHarness {
     fn executable_path(&self) -> Option<PathBuf> {
         self.resolve_executable().ok()
     }
+    fn update_args(&self) -> &'static [&'static str] {
+        &["update"]
+    }
     fn model_context(&self) -> Result<Option<crate::ModelContext>, HarnessError> {
         self.discovery_context().map(Some)
     }
