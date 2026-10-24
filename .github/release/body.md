@@ -1,1 +1,1 @@
-See [INSTALL.md](https://github.com/dstrml/wu/blob/main/docs/INSTALL.md) for installation instructions.
+See [Readme](https://github.com/dstrml/wu#install) for installation instructions.

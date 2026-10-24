@@ -52,6 +52,7 @@ const SPINNER_CELL: f32 = 2.0;
 const SPINNER_RING: [[f32; 2]; 3] = [[0.0, 1.0], [5.0, 2.0], [4.0, 3.0]];
 
 pub fn init(cx: &mut App) {
+    workspace::register_serializable_item::<ChatView>(cx);
     cx.observe_new(|workspace: &mut Workspace, _, _| {
         workspace
             .register_action(|workspace, _: &ToggleFocus, window, cx| {

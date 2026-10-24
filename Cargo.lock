@@ -157,6 +157,7 @@ dependencies = [
  "chrono",
  "collections",
  "command_palette_hooks",
+ "db",
  "dictation",
  "editor",
  "file_icons",

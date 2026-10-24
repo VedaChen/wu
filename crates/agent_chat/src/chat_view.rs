@@ -9,6 +9,7 @@ mod image_viewer;
 mod links;
 mod mermaid;
 mod outline;
+mod persistence;
 mod queue_panel;
 mod search;
 mod side_pane;

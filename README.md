@@ -18,7 +18,7 @@ Wu is a fast, native code editor written in Rust, with a clean, modern design an
 - ✨ **Beautiful by default.** Clean, modern look with a delightful UX.
 - 🤫 **No account or telemetry.** Nothing to sign in to. Wu never sends your usage data anywhere.
 
-## Install
+## Download
 
 On macOS and Linux, run:
 

@@ -7,6 +7,7 @@ release body.
 
 ## Unreleased
 
+- Agent chats are restored on restart.
 - Typing `@` in an agent chat now lists project's files right away.
 - Files, commands and skills picked from the chat box menus show up as badges.
 - Typing `$` in a Claude Code chat now lists skills.

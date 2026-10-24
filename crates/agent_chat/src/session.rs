@@ -6,7 +6,7 @@ use agent_harness::{
 };
 use anyhow::{Context as _, Result};
 use collections::{HashMap, HashSet};
-use futures::StreamExt as _;
+use futures::{FutureExt as _, StreamExt as _, future::Shared};
 use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Global, SharedString, Task};
 use language::LanguageRegistry;
 use markdown::Markdown;
@@ -2091,7 +2091,7 @@ pub struct AgentStore {
     save_list_prefs_task: Task<()>,
     metadata_writes: HashMap<String, Task<()>>,
     save_defaults_task: Task<()>,
-    load_task: Option<Task<()>>,
+    load_task: Option<Shared<Task<()>>>,
 }
 
 #[derive(Default)]
@@ -2299,7 +2299,23 @@ impl AgentStore {
                 .log_err();
             }
         });
-        self.load_task = Some(load);
+        self.load_task = Some(load.shared());
+    }
+
+    /// Waits for the saved chat list, which may still be loading at startup.
+    pub fn open_saved_session(
+        &mut self,
+        id: SharedString,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Entity<AgentSession>>> {
+        let loaded = self.load_task.clone();
+        cx.spawn(async move |this, cx| {
+            if let Some(loaded) = loaded {
+                loaded.await;
+            }
+            this.update(cx, |this, cx| this.open_session(&id, cx))?
+                .await
+        })
     }
 
     fn harness(&mut self, kind: AgentKind) -> Arc<dyn Harness> {
@@ -3259,6 +3275,32 @@ pub(crate) mod tests {
         reopened.update(cx, |store, cx| store.load_saved_chats(cx));
         cx.run_until_parked();
         assert_eq!(saved(cx), 1);
+    }
+
+    #[gpui::test]
+    async fn saved_chats_open_before_the_chat_list_finishes_loading(cx: &mut TestAppContext) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+        });
+        session.update(cx, |session, cx| {
+            session.update_settings(
+                |settings| settings.permission = PermissionMode::FullAccess,
+                cx,
+            )
+        });
+        let id = session_id(&session, cx);
+        cx.run_until_parked();
+
+        let reopened_store = new_store(directory.path(), cx);
+        let reopened = reopened_store
+            .update(cx, |store, cx| {
+                store.open_saved_session(id.clone().into(), cx)
+            })
+            .await
+            .expect("chat reopens");
+        assert_eq!(session_id(&reopened, cx), id);
     }
 
     #[gpui::test]
