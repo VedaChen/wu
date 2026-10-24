@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+- Typing `@` in an agent chat now shows more relevant file suggestions.
+
 ## 1.1.10 - 2026-10-24
 
 - Agent CLIs are now kept up to date by Wu.

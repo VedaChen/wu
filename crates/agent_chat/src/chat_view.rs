@@ -3713,6 +3713,61 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_mentions_start_with_recent_files_and_rank_files_first(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        bind_composer_keys(cx);
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/proj",
+            serde_json::json!({
+                "src": { "main.rs": "", "lib.rs": "" },
+                "lib": {},
+                "README.md": "",
+            }),
+        )
+        .await;
+        let project = project::Project::test(fs, [std::path::Path::new("/proj")], cx).await;
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, "/proj".into(), cx)
+        });
+        let (multi_workspace, cx) = cx.add_window_view(|window, cx| {
+            workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+        });
+        let workspace = multi_workspace.read_with(cx, |multi, _| multi.workspace().clone());
+        for path in ["/proj/src/lib.rs", "/proj/src/main.rs"] {
+            workspace
+                .update_in(cx, |workspace, window, cx| {
+                    workspace.open_abs_path(path.into(), Default::default(), window, cx)
+                })
+                .await
+                .expect("open file");
+        }
+        let view = workspace.update_in(cx, |workspace, window, cx| {
+            let weak = cx.entity().downgrade();
+            let chat = cx.new(|cx| {
+                ChatView::new(session.clone(), store.clone(), project.clone(), weak, window, cx)
+            });
+            workspace.add_item_to_active_pane(Box::new(chat.clone()), None, true, window, cx);
+            chat
+        });
+        view.update_in(cx, |view, window, cx| {
+            window.focus(&view.composer.focus_handle(cx), cx)
+        });
+        cx.simulate_input("@");
+        cx.run_until_parked();
+        assert_eq!(matches(&view, cx), ["main.rs", "lib.rs"]);
+        cx.simulate_input("lib");
+        cx.run_until_parked();
+        assert_eq!(matches(&view, cx), ["lib.rs", "lib"]);
+    }
+
+    #[gpui::test]
     async fn file_links_open_read_only_in_the_side_pane(cx: &mut TestAppContext) {
         cx.update(|cx| {
             workspace::AppState::test(cx);

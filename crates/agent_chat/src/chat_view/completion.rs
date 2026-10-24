@@ -13,10 +13,10 @@ use editor::{FoldPlaceholder, MultiBufferOffset, SelectionEffects, display_map::
 use file_icons::FileIcons;
 use gpui::{
     Animation, AnimationExt as _, AnyElement, App, Context, Corners, Focusable as _, FontWeight,
-    Hsla, IntoElement, ParentElement, SharedString, Styled, Task, Window, canvas, deferred, div,
+    Hsla, IntoElement, ParentElement, SharedString, Styled, Window, canvas, deferred, div,
     pulsating_between, px, relative,
 };
-use project::{Candidates, PathMatchCandidateSet};
+use project::{Candidates, PathMatchCandidateSet, ProjectPath};
 use std::{
     ops::Range,
     path::{Path, PathBuf},
@@ -317,6 +317,28 @@ impl ChatView {
         cx.notify();
     }
 
+    fn recent_mentions(
+        &self,
+        history: Vec<(ProjectPath, Option<PathBuf>)>,
+        cwd: &Path,
+        cx: &App,
+    ) -> Vec<MentionItem> {
+        let project = self.project.read(cx);
+        history
+            .into_iter()
+            .filter(|(project_path, _)| {
+                project
+                    .entry_for_path(project_path, cx)
+                    .is_some_and(|entry| entry.is_file())
+            })
+            .filter_map(|(project_path, abs_path)| {
+                abs_path.or_else(|| project.absolute_path(&project_path, cx))
+            })
+            .take(MAX_MENTION_RESULTS)
+            .map(|path| mention_item(path, false, cwd))
+            .collect()
+    }
+
     fn root_mentions(&self, cwd: &Path, cx: &App) -> Vec<MentionItem> {
         self.project
             .read(cx)
@@ -344,8 +366,25 @@ impl ChatView {
     fn search_mentions(&mut self, query: String, cx: &mut Context<Self>) {
         let cwd = self.session.read(cx).metadata().cwd.clone();
         if query.is_empty() {
-            self.mention_results = self.root_mentions(&cwd, cx);
-            self._mention_search = Task::ready(());
+            let workspace = self.workspace.clone();
+            // The chat is itself a workspace item, so reading the history while it updates panics.
+            self._mention_search = cx.spawn(async move |this, cx| {
+                let history = workspace
+                    .read_with(cx, |workspace, cx| {
+                        workspace.recent_navigation_history(None, cx)
+                    })
+                    .unwrap_or_default();
+                this.update(cx, |this, cx| {
+                    let recent = this.recent_mentions(history, &cwd, cx);
+                    this.mention_results = if recent.is_empty() {
+                        this.root_mentions(&cwd, cx)
+                    } else {
+                        recent
+                    };
+                    cx.notify();
+                })
+                .log_err();
+            });
             return;
         }
         let project = self.project.read(cx);
@@ -378,7 +417,7 @@ impl ChatView {
                 cx.background_executor().clone(),
             )
             .await;
-            let items: Vec<MentionItem> = matches
+            let mut items: Vec<MentionItem> = matches
                 .into_iter()
                 .filter_map(|found| {
                     let root = roots
@@ -389,6 +428,7 @@ impl ChatView {
                     Some(mention_item(path, found.is_dir, &cwd))
                 })
                 .collect();
+            items.sort_by_key(|item| item.is_dir);
             this.update(cx, |this, cx| {
                 this.mention_results = items;
                 cx.notify();
