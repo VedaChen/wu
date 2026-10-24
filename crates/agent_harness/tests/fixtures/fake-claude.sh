@@ -24,12 +24,6 @@ read_reply() {
 
 case "$first" in
 
-*'"text":"<bash-input>echo bash-mode-ok</bash-input>"'*'"text":"<bash-stdout>bash-mode-ok</bash-stdout><bash-stderr></bash-stderr>"'*)
-  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-bash"}'
-  emit '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"saw it"}}}'
-  emit '{"type":"result","subtype":"success","result":"saw it","usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-bash"}'
-  ;;
-
 *scenario:fork-fallback*)
   for arg in "$@"; do [ "$arg" = "--fork-session" ] && exit 1; done
   case "$first" in *'<conversation>'*) ;; *) exit 1 ;; esac
@@ -172,15 +166,6 @@ case "$first" in
     emit '{"type":"result","subtype":"error_during_execution","errors":["bash tool was not allowed"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-mode"}'
     ;;
   esac
-  ;;
-
-*scenario:bash-steer*)
-  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-bash-steer"}'
-  emit '{"type":"result","subtype":"success","result":"idle","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-bash-steer"}'
-  read_reply next || exit 1
-  case "$next" in *'"text":"<bash-input>echo bash-steer-ok</bash-input>"'*'"text":"<bash-stdout>bash-steer-ok</bash-stdout>'*) ;; *) exit 9 ;; esac
-  emit '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"saw it again"}}}'
-  emit '{"type":"result","subtype":"success","result":"saw it again","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-bash-steer"}'
   ;;
 
 *scenario:steer*)

@@ -236,7 +236,6 @@ impl FakeOpencode {
             ("GET", path) if path.starts_with("/session/") => ("404 Not Found", json!({})),
             ("POST", "/session/ses_resume/fork") => ("200 OK", json!({ "id": "ses_resume" })),
             ("POST", path) if path.ends_with("/prompt_async") => ("204 No Content", json!({})),
-            ("POST", path) if path.ends_with("/shell") => ("200 OK", json!({})),
             ("POST", path) if path.ends_with("/abort") => ("200 OK", json!(true)),
             ("POST", path) if path.contains("/permission/") || path.contains("/question/") => {
                 ("200 OK", json!(true))
@@ -260,7 +259,6 @@ fn request(prompt: &str) -> RunRequest {
         skills: Vec::new(),
         auto_compact_tokens: None,
         chrome: false,
-        shell: false,
     }
 }
 
@@ -530,71 +528,6 @@ async fn model_and_advertised_variant_ride_the_prompt() {
     drain_to_done(&mut stream).await;
 }
 
-fn bash_part(fake: &FakeOpencode, message: &str, command: &str, output: Option<&str>) {
-    let state = match output {
-        Some(output) => {
-            json!({ "status": "completed", "input": { "command": command }, "output": output })
-        }
-        None => json!({ "status": "running", "input": { "command": command } }),
-    };
-    fake.emit(json!({
-        "type": "message.part.updated",
-        "properties": { "part": {
-            "id": format!("prt_{message}"), "messageID": message, "sessionID": "ses_test",
-            "type": "tool", "tool": "bash", "callID": format!("call_{message}"), "state": state,
-        }},
-    }));
-}
-
-#[tokio::test]
-async fn shell_commands_go_to_the_shell_endpoint_and_end_without_a_reply() {
-    let fake = FakeOpencode::start().await;
-    let (controls, steer, _token) = controls();
-    let mut run = request("git status");
-    run.shell = true;
-    let mut stream = harness(&fake).run(run, controls).await.unwrap();
-    next_event(&mut stream).await;
-    next_event(&mut stream).await;
-
-    let shells = wait_posts(&fake, "/session/ses_test/shell", 1).await;
-    assert_eq!(shells[0]["command"], "git status");
-    assert_eq!(shells[0]["agent"], "build");
-    assert!(fake.posts_to("/session/ses_test/prompt_async").is_empty());
-    assistant_message(&fake, "ses_test", "msg_1");
-    bash_part(&fake, "msg_1", "git status", None);
-    bash_part(&fake, "msg_1", "git status", Some("clean"));
-    idle(&fake, "ses_test");
-    let events = drain_to_done(&mut stream).await;
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AgentEvent::ToolResult { output: Some(output), .. } if output == "clean"
-        )),
-        "{events:?}"
-    );
-    assert!(matches!(
-        events.last(),
-        Some(AgentEvent::Done {
-            status: DoneStatus::Completed,
-            ..
-        })
-    ));
-
-    steer
-        .send(SteerMessage {
-            prompt: "ls".into(),
-            message_id: None,
-            attachments: Vec::new(),
-            skills: Vec::new(),
-            shell: true,
-        })
-        .await
-        .unwrap();
-    let shells = wait_posts(&fake, "/session/ses_test/shell", 2).await;
-    assert_eq!(shells[1]["command"], "ls");
-    assert!(fake.posts_to("/session/ses_test/prompt_async").is_empty());
-}
-
 #[tokio::test]
 async fn steer_queues_mid_turn_and_delivers_at_idle() {
     let fake = FakeOpencode::start().await;
@@ -619,7 +552,6 @@ async fn steer_queues_mid_turn_and_delivers_at_idle() {
             message_id: None,
             attachments: vec!["/tmp/extra.png".into()],
             skills: Vec::new(),
-            shell: false,
         })
         .await
         .unwrap();

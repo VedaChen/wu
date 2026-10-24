@@ -25,8 +25,6 @@ pub struct SteerMessage {
     /// Absolute image file paths.
     pub attachments: Vec<String>,
     pub skills: Vec<SkillRef>,
-    /// `prompt` is a shell command the user typed after `!`.
-    pub shell: bool,
 }
 
 pub struct RunControls {
@@ -143,11 +141,6 @@ pub fn leading_command(text: &str) -> Option<(&str, &str)> {
     let mut parts = rest.splitn(2, char::is_whitespace);
     let name = parts.next().filter(|name| !name.is_empty())?;
     Some((name, parts.next().unwrap_or_default().trim()))
-}
-
-pub fn shell_command(text: &str) -> Option<&str> {
-    let command = text.trim_start().strip_prefix('!')?.trim();
-    (!command.is_empty()).then_some(command)
 }
 
 /// npm-shim CLIs are `#!/usr/bin/env node` scripts whose `node` sits beside them.

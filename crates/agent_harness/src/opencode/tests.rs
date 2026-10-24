@@ -139,7 +139,6 @@ fn steer(prompt: &str) -> crate::SteerMessage {
         message_id: None,
         attachments: Vec::new(),
         skills: Vec::new(),
-        shell: false,
     }
 }
 

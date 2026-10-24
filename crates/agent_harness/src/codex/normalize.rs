@@ -228,10 +228,6 @@ pub(super) fn collab_spawn_child(item: &Value) -> Option<&str> {
     }
 }
 
-pub(crate) fn is_user_shell(item: &Value) -> bool {
-    item.get("source").and_then(Value::as_str) == Some("userShell")
-}
-
 pub(crate) fn map_item(phase: Phase, item: &Value) -> Vec<AgentEvent> {
     let id = str_field(item, &["id"]);
     let status = str_field(item, &["status"]);
@@ -307,14 +303,10 @@ pub(crate) fn map_item(phase: Phase, item: &Value) -> Vec<AgentEvent> {
                 let exit_code = field(item, &["exitCode", "exit_code"])
                     .and_then(Value::as_i64)
                     .unwrap_or(0);
-                let output = is_user_shell(item)
-                    .then(|| str_field(item, &["aggregatedOutput", "aggregated_output"]))
-                    .map(|output| output.trim_end().to_owned())
-                    .filter(|output| !output.is_empty());
                 vec![AgentEvent::ToolResult {
                     id,
                     is_error: status == "failed" || exit_code != 0,
-                    output,
+                    output: None,
                     diff: None,
                 }]
             }

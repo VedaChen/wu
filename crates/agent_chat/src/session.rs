@@ -247,13 +247,6 @@ impl Prompt {
         self.text.trim().is_empty() && self.attachments.is_empty()
     }
 
-    pub fn shell_command(&self) -> Option<&str> {
-        if !self.attachments.is_empty() || !self.skills.is_empty() {
-            return None;
-        }
-        agent_harness::shell_command(&self.text)
-    }
-
     fn merge(&mut self, other: Prompt) {
         if !other.text.trim().is_empty() {
             if !self.text.trim().is_empty() {
@@ -918,7 +911,6 @@ impl AgentSession {
     pub fn can_steer(&self, prompt: &Prompt) -> bool {
         // Claude reads a slash command sent into a running turn as plain text.
         self.working
-            && prompt.shell_command().is_none()
             && !(self.metadata.kind == AgentKind::Claude
                 && agent_harness::leading_command(&prompt.text).is_some())
     }
@@ -1141,10 +1133,7 @@ impl AgentSession {
             .run
             .as_ref()
             .is_some_and(|run| run.interrupt.is_cancelled());
-        let is_command = |prompt: &Prompt| {
-            agent_harness::leading_command(&prompt.text).is_some()
-                || prompt.shell_command().is_some()
-        };
+        let is_command = |prompt: &Prompt| agent_harness::leading_command(&prompt.text).is_some();
         let steering_command = self.run.is_some() && !stopping && !self.can_steer(&prompt);
         // Merging would turn the other message into the command's arguments.
         let merging_command = stopping
@@ -1196,11 +1185,10 @@ impl AgentSession {
                 return;
             }
             let steer = SteerMessage {
-                prompt: prompt.shell_command().unwrap_or(&prompt.text).to_owned(),
+                prompt: prompt.text.clone(),
                 message_id: None,
                 attachments: attachment_paths(&prompt.attachments),
                 skills: prompt.skills.clone(),
-                shell: prompt.shell_command().is_some(),
             };
             if run.steering.try_send(steer).is_ok() {
                 cx.notify();
@@ -1318,10 +1306,7 @@ impl AgentSession {
                 self.metadata.fork_context = context;
                 prompt.text.clone()
             }
-            Some(context)
-                if agent_harness::leading_command(&prompt.text).is_none()
-                    && prompt.shell_command().is_none() =>
-            {
+            Some(context) if agent_harness::leading_command(&prompt.text).is_none() => {
                 self.save_metadata(cx);
                 format!(
                     "Continue this conversation using the following prior conversation as context.\n<conversation>\n{context}\n</conversation>\n\n{}",
@@ -1334,9 +1319,8 @@ impl AgentSession {
             }
         };
         let settings = self.metadata.settings.clone();
-        let shell = prompt.shell_command().is_some();
         let request = RunRequest {
-            prompt: prompt.shell_command().map_or(text, str::to_owned),
+            prompt: text,
             attachments: attachment_paths(&prompt.attachments),
             skills: prompt.skills.clone(),
             model: settings.model,
@@ -1348,7 +1332,6 @@ impl AgentSession {
             fork,
             auto_compact_tokens: self.auto_compact_tokens(cx),
             chrome: AgentChatSettings::get_global(cx).claude_in_chrome,
-            shell,
         };
         let (steering_tx, steering_rx) = tokio::sync::mpsc::channel(32);
         let interrupt = CancellationToken::new();
@@ -4492,53 +4475,6 @@ done
             );
             assert!(!session.subagent_running("spawn-1"));
         });
-    }
-
-    #[gpui::test]
-    async fn bang_messages_run_as_commands_in_the_live_run(cx: &mut TestAppContext) {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let store = new_store(directory.path(), cx);
-        let session = store.update(cx, |store, cx| {
-            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
-        });
-        session.update(cx, |session, cx| {
-            let (steering, mut delivered) = tokio::sync::mpsc::channel(4);
-            session.run = Some(ActiveRun {
-                steering,
-                interrupt: CancellationToken::new(),
-                permission: tokio::sync::watch::channel(PermissionMode::Ask).0,
-                _events: Task::ready(()),
-            });
-            session.send_message("! ls -la", cx);
-            let steer = delivered.try_recv().expect("the command reaches the run");
-            assert!(steer.shell);
-            assert_eq!(steer.prompt, "ls -la");
-            assert!(session.is_working());
-
-            session.send_message("!pwd", cx);
-            assert!(delivered.try_recv().is_err());
-            assert_eq!(session.queue().len(), 1);
-            assert_eq!(
-                summarize(session.entries(), cx).last().map(String::as_str),
-                Some("user: ! ls -la")
-            );
-        });
-    }
-
-    #[test]
-    fn only_bare_bang_text_is_a_shell_command() {
-        assert_eq!(
-            Prompt::text("  ! git status ").shell_command(),
-            Some("git status")
-        );
-        assert_eq!(Prompt::text("!").shell_command(), None);
-        assert_eq!(Prompt::text("say hi!").shell_command(), None);
-        let with_image = Prompt {
-            text: "!ls".into(),
-            attachments: vec![PathBuf::from("/tmp/shot.png")],
-            skills: Vec::new(),
-        };
-        assert_eq!(with_image.shell_command(), None);
     }
 
     #[gpui::test]

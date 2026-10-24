@@ -1528,17 +1528,6 @@ impl ChatView {
         let last_entry = entries.len().saturating_sub(1);
         let group: SharedString = format!("agent-turn-{turn_index}").into();
         let mut rows: Vec<(TranscriptRow, AnyElement)> = Vec::new();
-        let user_index = items.first().and_then(|first| first.checked_sub(1));
-        let shell_output = match items.split_first() {
-            Some((first, rest)) if self.is_shell_output(*first, cx) => {
-                if let Entry::Tool(tool) = &entries[*first] {
-                    rows.push((TranscriptRow::Other, self.render_shell_output(tool, cx)));
-                }
-                Some(rest)
-            }
-            _ => None,
-        };
-        let items = shell_output.unwrap_or(items);
         let all_items = items;
         let reply_position = items
             .iter()
@@ -1553,10 +1542,13 @@ impl ChatView {
             _ => items,
         };
         if compact {
-            let started = user_index.and_then(|index| match &entries[index] {
-                Entry::User { at, .. } => Some(*at),
-                _ => None,
-            });
+            let started = all_items
+                .first()
+                .and_then(|first| first.checked_sub(1))
+                .and_then(|index| match &entries[index] {
+                    Entry::User { at, .. } => Some(*at),
+                    _ => None,
+                });
             let finished = all_items.iter().rev().find_map(|index| match &entries[*index] {
                 Entry::Assistant { at, .. } | Entry::User { at, .. } => Some(*at),
                 _ => None,
@@ -2395,135 +2387,6 @@ impl ChatView {
                 this.full_output.insert(tool_id.clone());
                 cx.notify();
             }))
-    }
-
-    /// The command the user ran with `!`, which the agent reports as the turn's first tool.
-    fn is_shell_output(&self, index: usize, cx: &App) -> bool {
-        let entries = self.entries(cx);
-        self.subagent.is_none()
-            && matches!(
-                entries.get(index),
-                Some(Entry::Tool(ToolEntry {
-                    call: ToolCall::Exec { .. },
-                    ..
-                }))
-            )
-            && index
-                .checked_sub(1)
-                .and_then(|user| entries.get(user))
-                .is_some_and(|entry| {
-                    matches!(
-                        entry,
-                        Entry::User { text, attachments, skills, .. }
-                            if attachments.is_empty()
-                                && skills.is_empty()
-                                && agent_harness::shell_command(text).is_some()
-                    )
-                })
-    }
-
-    fn render_shell_output(&self, tool: &ToolEntry, cx: &Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors();
-        let faint = text_faint(cx);
-        let text = tool.output.clone().unwrap_or_default();
-        let show_all = self.full_output.contains(&tool.id);
-        let max_lines = if show_all {
-            usize::MAX
-        } else {
-            OUTPUT_MAX_LINES
-        };
-        let output = clip_lines(&text, usize::MAX, max_lines);
-        let color = if tool.status == ToolStatus::Failed {
-            mix(cx.theme().status().error, colors.text, 0.28)
-        } else {
-            colors.text.opacity(0.85)
-        };
-        let status = match tool.status {
-            ToolStatus::Running if output.lines.is_empty() => Some("Running…"),
-            ToolStatus::Completed | ToolStatus::Failed if output.lines.is_empty() => {
-                Some("No output")
-            }
-            ToolStatus::Canceled => Some("Stopped"),
-            _ => None,
-        };
-        let copy_key: SharedString = format!("copy-shell-{}", tool.id).into();
-        let is_copied = self.copied.as_ref() == Some(&copy_key);
-        let hover_group: SharedString = format!("shell-{}", tool.id).into();
-        v_flex()
-            .group(hover_group.clone())
-            .relative()
-            .w_full()
-            .min_w_0()
-            .overflow_hidden()
-            .rounded(px(10.))
-            .border_1()
-            .border_color(hairline(0.07, cx))
-            .bg(ink(0.03, cx))
-            .px(px(12.))
-            .py(px(8.))
-            .font(code_font(cx))
-            .text_size(px(TOOL_TEXT_SIZE))
-            .line_height(px(OUTPUT_LINE_HEIGHT))
-            .when(!output.lines.is_empty(), |this| {
-                this.child(
-                    div()
-                        .w_full()
-                        .min_w_0()
-                        .pr(px(24.))
-                        .text_color(color)
-                        .child(output.lines.join("\n")),
-                )
-            })
-            .when(output.hidden > 0, |this| {
-                this.child(self.render_show_full(
-                    format!("agent-full-shell-{}", tool.id),
-                    format!(
-                        "Show {} more lines ({})",
-                        output.hidden,
-                        format_bytes(text.len())
-                    ),
-                    &tool.id,
-                    cx,
-                ))
-            })
-            .children(status.map(|status| div().text_color(faint).child(status)))
-            .when(!text.is_empty(), |this| {
-                this.child(
-                    div()
-                        .id(ElementId::Name(copy_key.clone()))
-                        .absolute()
-                        .top(px(6.))
-                        .right(px(6.))
-                        .size(px(20.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(6.))
-                        .cursor_pointer()
-                        .visible_on_hover(hover_group)
-                        .hover(|style| style.bg(ink(0.06, cx)))
-                        .tooltip(Tooltip::text("Copy output"))
-                        .child(
-                            icon(
-                                if is_copied {
-                                    IconName::AgentCheck
-                                } else {
-                                    IconName::AgentCopy
-                                },
-                                12.,
-                            )
-                            .text_color(colors.text_muted),
-                        )
-                        .on_click(cx.listener({
-                            let text = text.to_string();
-                            move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.copy(copy_key.clone(), text.clone(), cx)
-                            }
-                        })),
-                )
-            })
-            .into_any_element()
     }
 
     fn render_new_chat(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {

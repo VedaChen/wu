@@ -52,7 +52,6 @@ fn request(prompt: &str) -> RunRequest {
         skills: Vec::new(),
         auto_compact_tokens: None,
         chrome: false,
-        shell: false,
     }
 }
 
@@ -118,87 +117,6 @@ async fn permission_changes_reach_a_running_turn() {
                 ..
             }
         )),
-        "{events:?}"
-    );
-}
-
-#[tokio::test]
-async fn shell_commands_run_first_and_claude_replies_to_their_output() {
-    let (controls, _steer, _token) = controls("A");
-    let mut req = request("echo bash-mode-ok");
-    req.shell = true;
-    let events = run_to_end(&harness(), req, controls).await;
-    let id = match events.first() {
-        Some(AgentEvent::ToolCall {
-            id,
-            call: ToolCall::Exec { command },
-        }) if command == "echo bash-mode-ok" => id.clone(),
-        other => panic!("expected the command first, got {other:?}"),
-    };
-    assert!(events.iter().any(|event| matches!(
-        event,
-        AgentEvent::ToolResult { id: result, is_error: false, output: Some(output), .. }
-            if *result == id && output == "bash-mode-ok"
-    )));
-    assert!(
-        events
-            .iter()
-            .any(|event| matches!(event, AgentEvent::TextDelta { text } if text == "saw it"))
-    );
-    assert!(matches!(
-        events.last(),
-        Some(AgentEvent::Done {
-            status: DoneStatus::Completed,
-            ..
-        })
-    ));
-}
-
-#[tokio::test]
-async fn shell_commands_sent_to_an_idle_run_keep_the_same_process() {
-    let (controls, steer, _token) = controls("A");
-    let mut stream = harness()
-        .run(request("scenario:bash-steer"), controls)
-        .await
-        .expect("run starts");
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while let Some(event) = stream.next().await {
-            if matches!(event.expect("stream event"), AgentEvent::Done { .. }) {
-                return;
-            }
-        }
-        panic!("the first turn never finished");
-    })
-    .await
-    .expect("first turn finished in time");
-    steer
-        .send(SteerMessage {
-            prompt: "echo bash-steer-ok".into(),
-            message_id: None,
-            attachments: Vec::new(),
-            skills: Vec::new(),
-            shell: true,
-        })
-        .await
-        .expect("run takes the command");
-    drop(steer);
-    let events = tokio::time::timeout(
-        Duration::from_secs(10),
-        stream.map(|r| r.expect("stream event")).collect::<Vec<_>>(),
-    )
-    .await
-    .expect("run finished in time");
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AgentEvent::ToolResult { output: Some(output), .. } if output == "bash-steer-ok"
-        )),
-        "{events:?}"
-    );
-    assert!(
-        events
-            .iter()
-            .any(|event| matches!(event, AgentEvent::TextDelta { text } if text == "saw it again")),
         "{events:?}"
     );
 }
@@ -436,7 +354,6 @@ async fn steering_lines_are_written_to_stdin_mid_run() {
             message_id: None,
             attachments: Vec::new(),
             skills: Vec::new(),
-            shell: false,
         })
         .await
         .expect("steer queued");
@@ -498,7 +415,6 @@ async fn image_attachments_ride_the_prompt_and_steers_as_image_blocks() {
             message_id: None,
             attachments: vec![path(&jpeg)],
             skills: Vec::new(),
-            shell: false,
         })
         .await
         .expect("steer queued");
@@ -795,7 +711,6 @@ async fn a_replay_confirms_superseded_steers_and_the_turn_ends() {
                 message_id: None,
                 attachments: Vec::new(),
                 skills: Vec::new(),
-                shell: false,
             })
             .await
             .expect("steer queued");
@@ -837,7 +752,6 @@ async fn an_unreplayed_steer_releases_the_turn_end() {
             message_id: None,
             attachments: Vec::new(),
             skills: Vec::new(),
-            shell: false,
         })
         .await
         .expect("steer queued");
