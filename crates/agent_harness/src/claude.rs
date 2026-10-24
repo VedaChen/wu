@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     AgentEvent, DoneStatus, ExternalSession, HarnessId, Model, PermissionMode, ReasoningLevel,
-    RunRequest, SlashCommand, SteeringMode, UserInputAnswer, UserInputQuestion,
+    RunRequest, SkillRef, SlashCommand, SteeringMode, UserInputAnswer, UserInputQuestion,
 };
 
 use crate::process::{Child, ChildStdin, Command, Stdio};
@@ -474,6 +474,24 @@ fn collect_markdown_stems(dir: &std::path::Path, names: &mut HashSet<String>) {
     }
 }
 
+fn with_skills(prompt: &str, skills: &[SkillRef]) -> String {
+    let mut names: Vec<&str> = Vec::new();
+    for skill in skills {
+        if !names.contains(&skill.name.as_str()) {
+            names.push(&skill.name);
+        }
+    }
+    if names.is_empty() {
+        return prompt.to_owned();
+    }
+    let list = names
+        .iter()
+        .map(|name| format!("`{name}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{prompt}\n\nBefore you start, use these skills with the `Skill` tool: {list}.")
+}
+
 fn parse_initialize_commands(response: &Value) -> Vec<SlashCommand> {
     response
         .pointer("/response/commands")
@@ -677,7 +695,10 @@ impl ClaudeHarness {
             Some(request.prompt.clone())
         } else {
             let first = wire::user_message_line(
-                &apply_ultrathink(request.reasoning, &request.prompt),
+                &apply_ultrathink(
+                    request.reasoning,
+                    &with_skills(&request.prompt, &request.skills),
+                ),
                 &images,
             );
             stdin_tx.send(StdinMsg::Line(first)).ok();
@@ -1000,7 +1021,7 @@ async fn run_session(session: Session) {
                         }
                     }
                     let line = wire::steer_message_line(
-                        &apply_ultrathink(reasoning, &msg.prompt),
+                        &apply_ultrathink(reasoning, &with_skills(&msg.prompt, &msg.skills)),
                         &images,
                         &id,
                         open_tools.is_empty(),
@@ -1609,6 +1630,22 @@ mod tests {
         for name in ["context", "model", "notes"] {
             assert!(!names.contains(name), "{name}");
         }
+    }
+
+    #[test]
+    fn picked_skills_become_an_instruction_to_use_them() {
+        let skill = |name: &str| SkillRef {
+            name: name.into(),
+            path: format!("claude-skill:{name}"),
+        };
+        assert_eq!(with_skills("no skills", &[]), "no skills");
+        assert_eq!(
+            with_skills(
+                "$review and $docs",
+                &[skill("review"), skill("docs"), skill("review")]
+            ),
+            "$review and $docs\n\nBefore you start, use these skills with the `Skill` tool: `review`, `docs`."
+        );
     }
 
     #[test]

@@ -3828,11 +3828,25 @@ mod tests {
         view.update_in(cx, |view, window, cx| {
             window.focus(&view.composer.focus_handle(cx), cx)
         });
-        cx.simulate_input("look at @mai");
+        cx.simulate_input("look at @");
+        cx.run_until_parked();
+        assert_eq!(matches(&view, cx), ["src", "README.md"]);
+        cx.simulate_input("mai");
         cx.run_until_parked();
         assert_eq!(matches(&view, cx), ["main.rs"]);
         cx.simulate_keystrokes("enter");
         assert_eq!(composer_text(&view, cx), "look at @src/main.rs ");
+        let shown = view.update(cx, |view, cx| {
+            view.composer.update(cx, |editor, cx| editor.display_text(cx))
+        });
+        assert_eq!(shown, "look at ⋯ ");
+        view.update_in(cx, |view, window, cx| {
+            view.composer.update(cx, |editor, cx| {
+                editor.backspace(&editor::actions::Backspace, window, cx);
+                editor.backspace(&editor::actions::Backspace, window, cx);
+            })
+        });
+        assert_eq!(composer_text(&view, cx), "look at ");
     }
 
     #[gpui::test]
@@ -3886,6 +3900,59 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn dollar_menu_lists_claude_skills(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        bind_composer_keys(cx);
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let skill = directory.path().join(".claude/skills/review");
+        std::fs::create_dir_all(&skill).expect("skill directory");
+        std::fs::write(skill.join("SKILL.md"), "body").expect("skill file");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let project = project::Project::test(FakeFs::new(cx.executor()), [], cx).await;
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+        });
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            ChatView::new(
+                session.clone(),
+                store.clone(),
+                project,
+                WeakEntity::new_invalid(),
+                window,
+                cx,
+            )
+        });
+        view.update_in(cx, |view, window, cx| {
+            window.focus(&view.composer.focus_handle(cx), cx)
+        });
+
+        cx.simulate_input("use $");
+        run_until(cx, |cx| {
+            store.read_with(cx, |store, _| {
+                store
+                    .commands(AgentKind::Claude, directory.path())
+                    .is_some_and(|catalog| catalog.loaded)
+            })
+        });
+        assert_eq!(matches(&view, cx), ["review"]);
+        cx.simulate_keystrokes("enter");
+        assert_eq!(composer_text(&view, cx), "use $review ");
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                view.composer_skills,
+                [agent_harness::SkillRef {
+                    name: "review".into(),
+                    path: "claude-skill:review".into(),
+                }]
+            )
+        });
+    }
+
+    #[gpui::test]
     async fn slash_menu_inserts_agent_commands_and_runs_wu_commands(cx: &mut TestAppContext) {
         cx.update(|cx| {
             workspace::AppState::test(cx);
@@ -3924,6 +3991,10 @@ mod tests {
         assert_eq!(matches(&view, cx), ["review", "resume"]);
         cx.simulate_keystrokes("down down enter");
         assert_eq!(composer_text(&view, cx), "/review ");
+        let shown = view.update(cx, |view, cx| {
+            view.composer.update(cx, |editor, cx| editor.display_text(cx))
+        });
+        assert_eq!(shown, "⋯ ");
         view.read_with(cx, |view, _| assert!(view.command_menu.is_none()));
 
         view.update_in(cx, |view, window, cx| {

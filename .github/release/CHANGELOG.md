@@ -7,6 +7,10 @@ release body.
 
 ## Unreleased
 
+- Typing `@` in an agent chat now lists project's files right away.
+- Files, commands and skills picked from the chat box menus show up as badges.
+- Typing `$` in a Claude Code chat now lists skills.
+
 ## 1.1.9 - 2026-10-24
 
 - Start a message with `!` in an agent chat to run it as a shell command.
