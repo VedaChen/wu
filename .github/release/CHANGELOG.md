@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+- Wu Dark has a new look with a solid background, softer text colors and a periwinkle accent. Code colors are unchanged.
+- Added the Wu Dark Translucent theme, which keeps the see-through look of the previous Wu Dark.
 - Line breaks in agent replies now show as written instead of running lines together.
 - Typing `@` in an agent chat now shows more relevant file suggestions.
 - Images in agent chats can now be downloaded.
