@@ -935,11 +935,26 @@ async fn run_session(session: Session) {
             .await?;
         client.notify("initialized", None);
 
+        let mut drop_problem = None;
         let thread = if let Some(resume) = &request.resume {
             let mut p = start_params.clone();
             p.insert("threadId".into(), Value::String(resume.clone()));
             match client.request("thread/resume", Value::Object(p)).await {
-                Ok(thread) => thread,
+                Ok(thread) => {
+                    if let Some(prompt) = &request.drop_prompt
+                        && let Err(error) = client
+                            .request(
+                                "thread/revert",
+                                json!({ "threadId": resume, "beforeTurnId": prompt }),
+                            )
+                            .await
+                    {
+                        drop_problem = Some(format!(
+                            "Codex couldn't forget your earlier message, so it may still see it. {error}"
+                        ));
+                    }
+                    thread
+                }
                 Err(e) => {
                     if command_request(&request.prompt, resume)?.is_some() {
                         return Err(e);
@@ -965,9 +980,9 @@ async fn run_session(session: Session) {
         let thread_id = thread["thread"]["id"].as_str().unwrap_or("").to_owned();
         let mut children = subagents::Subagents::new(thread_id.clone());
         children.restore(&thread["thread"]);
-        Ok::<_, HarnessError>((thread_id, children))
+        Ok::<_, HarnessError>((thread_id, children, drop_problem))
     };
-    let (thread_id, mut children) = tokio::select! {
+    let (thread_id, mut children, drop_problem) = tokio::select! {
         res = setup => match res {
             Ok(thread_id) => thread_id,
             Err(e) => {
@@ -1054,6 +1069,12 @@ async fn run_session(session: Session) {
         shutdown_child(&mut child, kill_grace).await;
         return;
     }
+    if let Some(message) = drop_problem
+        && !send(&event_tx, AgentEvent::Error { message }).await
+    {
+        shutdown_child(&mut child, kill_grace).await;
+        return;
+    }
 
     let mut router = TurnRouter::default();
     match start_turn(
@@ -1067,7 +1088,15 @@ async fn run_session(session: Session) {
     )
     .await
     {
-        Ok(id) => router.adopt_started(id),
+        Ok(id) => {
+            if !id.is_empty()
+                && !send(&event_tx, AgentEvent::PromptRecorded { id: id.clone() }).await
+            {
+                shutdown_child(&mut child, kill_grace).await;
+                return;
+            }
+            router.adopt_started(id)
+        }
         Err(e) => {
             send_final(
                 &event_tx,
@@ -1526,6 +1555,11 @@ async fn steer_as_new_turn(
 ) -> bool {
     match start_turn(client, params).await {
         Ok(id) => {
+            if !id.is_empty()
+                && !send(event_tx, AgentEvent::PromptRecorded { id: id.clone() }).await
+            {
+                return false;
+            }
             router.adopt_started(id);
             *done_current = false;
             let (prev, next) = rotate(assistant_message_id);

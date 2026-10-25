@@ -117,6 +117,24 @@ impl ChatView {
         cx.notify();
     }
 
+    pub(super) fn edit_last_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_queued_edit(window, cx);
+        let Some(mut prompt) = self
+            .session
+            .update(cx, |session, cx| session.edit_last_message(cx))
+        else {
+            return;
+        };
+        prompt.merge(Prompt {
+            text: self.composer.read(cx).text(cx),
+            attachments: std::mem::take(&mut self.attachments),
+            skills: std::mem::take(&mut self.composer_skills),
+        });
+        self.set_composer_prompt(prompt, window, cx);
+        window.focus(&self.composer.focus_handle(cx), cx);
+        cx.notify();
+    }
+
     fn set_composer_prompt(&mut self, prompt: Prompt, window: &mut Window, cx: &mut Context<Self>) {
         self.composer
             .update(cx, |editor, cx| editor.set_text(prompt.text, window, cx));

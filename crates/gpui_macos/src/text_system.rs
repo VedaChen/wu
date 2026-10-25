@@ -610,7 +610,8 @@ impl MacTextSystemState {
                 ix_converter.advance_to_utf16_ix(glyph_utf16_ix);
                 glyphs.push(ShapedGlyph {
                     id: GlyphId(glyph_id as u32),
-                    position: point(position.x as f32, position.y as f32).map(px),
+                    // Core Text measures up from the baseline; GPUI measures down.
+                    position: point(position.x as f32, -position.y as f32).map(px),
                     index: ix_converter.utf8_ix,
                     is_emoji: self.is_emoji(font_id),
                 });
@@ -768,6 +769,30 @@ mod lenient_font_attributes {
 mod tests {
     use crate::MacTextSystem;
     use gpui::{FontRun, GlyphId, PlatformTextSystem, font, px};
+
+    #[test]
+    fn raised_glyphs_sit_above_the_baseline() {
+        let fonts = MacTextSystem::new();
+        let font_id = fonts.font_id(&font("Helvetica")).unwrap();
+        // Urdu falls back to Noto Nastaliq, which raises the start of each word.
+        let line = "مجھے";
+        let layout = fonts.layout_line(
+            line,
+            px(16.),
+            &[FontRun {
+                font_id,
+                len: line.len(),
+            }],
+        );
+        let first_letter = layout
+            .runs
+            .iter()
+            .flat_map(|run| &run.glyphs)
+            .filter(|glyph| glyph.index == 0)
+            .map(|glyph| glyph.position.y)
+            .fold(px(0.), |highest, y| if y < highest { y } else { highest });
+        assert!(first_letter < px(-8.), "{first_letter:?}");
+    }
 
     #[test]
     fn test_layout_line_bom_char() {

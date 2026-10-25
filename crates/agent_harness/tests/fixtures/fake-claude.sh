@@ -223,6 +223,21 @@ case "$first" in
   exec sleep 30
   ;;
 
+*scenario:drop*)
+  uuid=$(printf '%s\n' "$first" | sed 's/.*"uuid":"\([^"]*\)".*/\1/')
+  resumed="fresh"
+  for arg in "$@"; do
+    case "$arg" in
+      --resume-session-at=*) resumed="at ${arg#--resume-session-at=}" ;;
+      --resume=*) [ "$resumed" = fresh ] && resumed="whole" ;;
+    esac
+  done
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-drop"}'
+  emit "{\"type\":\"user\",\"uuid\":\"$uuid\",\"parent_tool_use_id\":null,\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"scenario:drop\"}]}}"
+  emit "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"$resumed\"}}}"
+  emit '{"type":"result","subtype":"success","result":"done","usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-drop"}'
+  ;;
+
 *scenario:interrupt*)
   emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-int"}'
   # Wedge without reading stdin to force the SIGTERM escalation path.

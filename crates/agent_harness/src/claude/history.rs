@@ -357,6 +357,59 @@ pub(crate) fn list_sessions(
     sessions
 }
 
+pub(crate) enum ResumePoint {
+    At(String),
+    /// The prompt opened the chat, so nothing is kept.
+    Empty,
+    NotFound,
+}
+
+pub(crate) fn resume_point(config_dir: &Path, session_id: &str, prompt: &str) -> ResumePoint {
+    if !valid_session_id(session_id) {
+        return ResumePoint::NotFound;
+    }
+    // Scan every project dir instead of re-deriving the CLI's cwd encoding.
+    let Some(records) = std::fs::read_dir(config_dir.join("projects"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .find_map(|project| records(&project.path().join(format!("{session_id}.jsonl"))).ok())
+    else {
+        return ResumePoint::NotFound;
+    };
+    let by_id: HashMap<&str, &Value> = records
+        .iter()
+        .filter(|record| is_conversation(record))
+        .filter_map(|record| Some((record.get("uuid")?.as_str()?, record)))
+        .collect();
+    let parent_of = |record: &Value| {
+        record
+            .get("parentUuid")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    };
+    let Some(mut parent) = by_id.get(prompt).map(|record| parent_of(record)) else {
+        return ResumePoint::NotFound;
+    };
+    for _ in 0..by_id.len() {
+        let Some(id) = parent else {
+            return ResumePoint::Empty;
+        };
+        let Some(record) = by_id.get(id.as_str()) else {
+            return ResumePoint::NotFound;
+        };
+        // The CLI can only resume at a message it loads back.
+        if matches!(
+            record.get("type").and_then(Value::as_str),
+            Some("user" | "assistant")
+        ) {
+            return ResumePoint::At(id);
+        }
+        parent = parent_of(record);
+    }
+    ResumePoint::NotFound
+}
+
 pub(crate) fn read_history(
     config_dir: &Path,
     cwd: &Path,

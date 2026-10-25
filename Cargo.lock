@@ -159,6 +159,7 @@ dependencies = [
  "command_palette_hooks",
  "db",
  "dictation",
+ "dirs",
  "editor",
  "file_icons",
  "fs",

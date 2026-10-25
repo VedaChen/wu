@@ -225,6 +225,17 @@ pub(super) fn normalize_v2_frame_with_session_models(
         }
         // Cumulative session totals measure spend, not context occupancy.
         "session.usage.updated" => Vec::new(),
+        // A delivered prompt keeps its inbox id as its message id.
+        "session.inbox.delivered" => vec![json!({
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "sessionID": session(),
+                    "id": data.get("inboxID").cloned().unwrap_or(Value::Null),
+                    "role": "user",
+                }
+            }
+        })],
         "session.created" => vec![json!({
             "type": "session.created",
             "properties": {

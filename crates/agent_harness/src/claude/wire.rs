@@ -297,9 +297,10 @@ fn user_content(text: &str, images: &[ImageBlock]) -> Value {
     Value::Array(blocks)
 }
 
-pub(crate) fn user_message_line(text: &str, images: &[ImageBlock]) -> String {
+pub(crate) fn user_message_line(text: &str, images: &[ImageBlock], id: &str) -> String {
     json!({
         "type": "user",
+        "uuid": id,
         "message": { "role": "user", "content": user_content(text, images) },
         "parent_tool_use_id": null,
     })
@@ -433,9 +434,10 @@ mod tests {
 
     #[test]
     fn user_line_shape_matches_protocol() {
-        let line = user_message_line("hi", &[]);
+        let line = user_message_line("hi", &[], "u1");
         let v: Value = serde_json::from_str(&line).expect("json");
         assert_eq!(v["type"], "user");
+        assert_eq!(v["uuid"], "u1");
         assert_eq!(v["message"]["content"], "hi");
         assert!(v["parent_tool_use_id"].is_null());
     }
@@ -447,7 +449,7 @@ mod tests {
             base64_data: "AAAA".into(),
         }];
         for line in [
-            user_message_line("look", &images),
+            user_message_line("look", &images, "u1"),
             steer_message_line("look", &images, "u1", true),
         ] {
             let v: Value = serde_json::from_str(&line).expect("json");

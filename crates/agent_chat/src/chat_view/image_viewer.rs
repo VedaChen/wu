@@ -1,12 +1,17 @@
-use super::{ChatView, ui};
+use super::{ChatView, DOWNLOADED_FEEDBACK, ui};
 use crate::chat_style::ink;
 use gpui::{
     AnyElement, Context, Image, ImageSource, IntoElement, MouseButton, ObjectFit, ParentElement,
     ScrollWheelEvent, SharedString, Styled, Window, deferred, div, hsla, img, px, relative,
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use theme::ActiveTheme as _;
-use ui::{Icon, IconName, IconSize, prelude::*};
+use ui::{Icon, IconName, IconSize, Tooltip, prelude::*};
+use util::ResultExt as _;
+use workspace::{Toast, notifications::NotificationId};
 
 const MIN_ZOOM: f32 = 1.;
 const MAX_ZOOM: f32 = 6.;
@@ -17,6 +22,56 @@ pub(super) struct Lightbox {
     pub source: ImageSource,
     pub name: SharedString,
     pub zoom: f32,
+    pub image: ChatImage,
+}
+
+#[derive(Clone)]
+pub(super) enum ChatImage {
+    File(PathBuf),
+    Data(Arc<Image>),
+}
+
+fn downloads_dir() -> PathBuf {
+    dirs::download_dir().unwrap_or_else(|| paths::home_dir().join("Downloads"))
+}
+
+fn unused_path(directory: &Path, file_name: &str) -> PathBuf {
+    let candidate = directory.join(file_name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let name = Path::new(file_name);
+    let stem = name
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let extension = name
+        .extension()
+        .map(|extension| format!(".{}", extension.to_string_lossy()))
+        .unwrap_or_default();
+    (2..)
+        .map(|number| directory.join(format!("{stem} ({number}){extension}")))
+        .find(|path| !path.exists())
+        .unwrap_or(candidate)
+}
+
+impl ChatImage {
+    pub(super) fn download_key(&self) -> SharedString {
+        match self {
+            ChatImage::File(path) => format!("download-{}", path.display()).into(),
+            ChatImage::Data(image) => format!("download-{}", image.id()).into(),
+        }
+    }
+
+    fn file_name(&self) -> String {
+        match self {
+            ChatImage::File(path) => path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "image".into()),
+            ChatImage::Data(_) => "diagram.svg".into(),
+        }
+    }
 }
 
 impl ChatView {
@@ -27,9 +82,10 @@ impl ChatView {
             .unwrap_or_default()
             .into();
         self.lightbox = Some(Lightbox {
-            source: path.into(),
+            source: path.clone().into(),
             name,
             zoom: 1.,
+            image: ChatImage::File(path),
         });
         window.focus(&self.lightbox_focus, cx);
         cx.notify();
@@ -42,12 +98,59 @@ impl ChatView {
         cx: &mut Context<Self>,
     ) {
         self.lightbox = Some(Lightbox {
-            source: image.into(),
+            source: image.clone().into(),
             name: "Mermaid diagram".into(),
             zoom: 1.,
+            image: ChatImage::Data(image),
         });
         window.focus(&self.lightbox_focus, cx);
         cx.notify();
+    }
+
+    pub(super) fn download_image(
+        &mut self,
+        image: ChatImage,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.save_image_in(downloads_dir(), image, window, cx);
+    }
+
+    fn save_image_in(
+        &mut self,
+        directory: PathBuf,
+        image: ChatImage,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let file_name = image.file_name();
+        let key = image.download_key();
+        let workspace = self.workspace.clone();
+        let saved = cx.background_spawn(async move {
+            std::fs::create_dir_all(&directory)?;
+            let destination = unused_path(&directory, &file_name);
+            match image {
+                ChatImage::File(path) => std::fs::copy(path, &destination).map(|_| ()),
+                ChatImage::Data(image) => std::fs::write(&destination, &image.bytes),
+            }
+        });
+        cx.spawn_in(window, async move |this, cx| match saved.await {
+            Ok(()) => this
+                .update(cx, |this, cx| this.show_done(key, DOWNLOADED_FEEDBACK, cx))
+                .log_err(),
+            Err(error) => {
+                let message = format!("Couldn't save the image: {error}");
+                workspace
+                    .update(cx, |workspace, cx| {
+                        workspace.show_toast(
+                            Toast::new(NotificationId::unique::<ChatView>(), message).autohide(),
+                            cx,
+                        )
+                    })
+                    .log_err()
+            }
+        })
+        .detach();
     }
 
     pub(super) fn close_image(&mut self, cx: &mut Context<Self>) {
@@ -161,6 +264,29 @@ impl ChatView {
                                     .text_color(gpui::white())
                                     .child(format!("{:.0}%", zoom * 100.)),
                             )
+                            .child({
+                                let image = lightbox.image.clone();
+                                let downloaded =
+                                    self.copied.as_ref() == Some(&image.download_key());
+                                button(
+                                    "agent-lightbox-download",
+                                    if downloaded {
+                                        IconName::Check
+                                    } else {
+                                        IconName::Download
+                                    },
+                                )
+                                .tooltip(Tooltip::text(if downloaded {
+                                    "Saved to Downloads"
+                                } else {
+                                    "Download"
+                                }))
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| {
+                                        this.download_image(image.clone(), window, cx)
+                                    },
+                                ))
+                            })
                             .child(
                                 button("agent-lightbox-zoom-out", IconName::Dash).on_click(
                                     cx.listener(|this, _, _, cx| this.zoom_image(1. / 1.25, cx)),
@@ -180,5 +306,58 @@ impl ChatView {
             .with_priority(2)
             .into_any_element(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        AgentKind,
+        session::tests::{new_store, run_until},
+    };
+    use gpui::{TestAppContext, WeakEntity};
+    use project::FakeFs;
+
+    #[gpui::test]
+    async fn downloads_never_replace_an_existing_file(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let project = project::Project::test(FakeFs::new(cx.executor()), [], cx).await;
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+        });
+        let source = directory.path().join("generated.png");
+        std::fs::write(&source, b"png bytes").expect("write image");
+        let downloads = directory.path().join("Downloads");
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            ChatView::new(
+                session.clone(),
+                store.clone(),
+                project,
+                WeakEntity::new_invalid(),
+                window,
+                cx,
+            )
+        });
+        let image = ChatImage::File(source);
+        for _ in 0..2 {
+            view.update_in(cx, |view, window, cx| {
+                view.save_image_in(downloads.clone(), image.clone(), window, cx)
+            });
+            cx.run_until_parked();
+        }
+        run_until(cx, |_| downloads.join("generated (2).png").exists());
+        assert_eq!(
+            std::fs::read(downloads.join("generated.png")).expect("saved"),
+            b"png bytes"
+        );
+        let shown = view.read_with(cx, |view, _| view.copied.clone());
+        assert_eq!(shown, Some(image.download_key()));
     }
 }

@@ -845,6 +845,7 @@ async fn run_session(session: Session) {
             Some(resume) => find_session(&server, resume, dir).await?,
             None => None,
         };
+        let mut drop_problem = None;
         let session_id = match resumed {
             Some(info) => {
                 let id = info
@@ -881,6 +882,13 @@ async fn run_session(session: Session) {
                             .await?;
                     }
                 }
+                if let Some(prompt) = &request.drop_prompt
+                    && let Err(error) = server.revert_to(&id, prompt, dir).await
+                {
+                    drop_problem = Some(format!(
+                        "OpenCode couldn't forget your earlier message, so it may still see it. {error}"
+                    ));
+                }
                 id
             }
             None => {
@@ -906,9 +914,9 @@ async fn run_session(session: Session) {
                 .set_model(&session_id, provider, model_id, variant.as_deref(), dir)
                 .await?;
         }
-        Ok::<_, HarnessError>((session_id, providers, rules_warning))
+        Ok::<_, HarnessError>((session_id, providers, rules_warning, drop_problem))
     };
-    let (session_id, providers, rules_warning) = tokio::select! {
+    let (session_id, providers, rules_warning, drop_problem) = tokio::select! {
         result = setup => match result {
             Ok(value) => value,
             Err(error) => {
@@ -965,11 +973,11 @@ async fn run_session(session: Session) {
         server.shutdown(kill_grace).await;
         return;
     }
-    if let Some(message) = rules_warning
-        && !send(&event_tx, AgentEvent::Error { message }).await
-    {
-        server.shutdown(kill_grace).await;
-        return;
+    for message in rules_warning.into_iter().chain(drop_problem) {
+        if !send(&event_tx, AgentEvent::Error { message }).await {
+            server.shutdown(kill_grace).await;
+            return;
+        }
     }
 
     let command_wire = match known_commands {
@@ -2045,10 +2053,23 @@ async fn handle_bus_event(context: BusContext<'_>) -> BusOutcome {
                 return BusOutcome::Continue;
             };
             if session == session_id {
+                let is_new = !main_feed.message_is_assistant.contains_key(message);
                 main_feed
                     .message_is_assistant
                     .entry(message.to_owned())
                     .or_insert(role == "assistant");
+                if is_new
+                    && role == "user"
+                    && !send(
+                        event_tx,
+                        AgentEvent::PromptRecorded {
+                            id: message.to_owned(),
+                        },
+                    )
+                    .await
+                {
+                    return BusOutcome::ConsumerGone;
+                }
                 if role == "assistant"
                     && let Some(tokens) = info.get("tokens")
                 {

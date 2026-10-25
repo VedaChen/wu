@@ -644,12 +644,37 @@ impl Harness for ClaudeHarness {
 impl ClaudeHarness {
     async fn run_with_mode(
         &self,
-        request: RunRequest,
+        mut request: RunRequest,
         controls: RunControls,
     ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
         let exe = self.resolve_executable()?;
+        let mut resume_at = None;
+        let mut drop_problem = None;
+        if let (Some(session_id), Some(prompt)) =
+            (request.resume.clone(), request.drop_prompt.take())
+        {
+            let config_dir = self.config_dir();
+            let point = tokio::task::spawn_blocking(move || {
+                history::resume_point(&config_dir, &session_id, &prompt)
+            })
+            .await
+            .unwrap_or(history::ResumePoint::NotFound);
+            match point {
+                history::ResumePoint::At(id) => resume_at = Some(id),
+                history::ResumePoint::Empty => request.resume = None,
+                history::ResumePoint::NotFound => {
+                    drop_problem = Some(
+                        "Claude Code couldn't find your earlier message, so it may still see it."
+                            .to_string(),
+                    )
+                }
+            }
+        }
         let discovered = self.models_cache.peek();
         let mut cmd = self.build_command(&exe, &request, discovered.as_deref());
+        if let Some(id) = &resume_at {
+            cmd.arg(format!("--resume-session-at={id}"));
+        }
         let normalizer = if let Some(session_id) = request.resume.as_ref().or(request.fork.as_ref())
         {
             Normalizer::for_resume(&self.config_dir(), session_id).await
@@ -688,23 +713,26 @@ impl ClaudeHarness {
         tokio::spawn(stdin_writer(stdin, stdin_rx));
 
         let (images, image_problems) = load_image_blocks(&request.attachments).await;
+        let first_prompt_id = uuid::Uuid::new_v4().to_string();
         let first = wire::user_message_line(
             &apply_ultrathink(
                 request.reasoning,
                 &with_skills(&request.prompt, &request.skills),
             ),
             &images,
+            &first_prompt_id,
         );
         stdin_tx.send(StdinMsg::Line(first)).ok();
 
         let (event_tx, event_rx) = mpsc::channel::<Result<AgentEvent, HarnessError>>(256);
-        for message in image_problems {
+        for message in drop_problem.into_iter().chain(image_problems) {
             if event_tx.try_send(Ok(AgentEvent::Error { message })).is_err() {
                 log::debug!("claude run consumer gone before an image problem was reported");
             }
         }
         tokio::spawn(run_session(Session {
             normalizer,
+            first_prompt_id,
             skip_prompts: request.permission.skips_prompts(),
             child,
             stdout_lines: BufReader::new(stdout).lines(),
@@ -817,6 +845,7 @@ async fn stdin_writer(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Std
 
 struct Session {
     normalizer: Normalizer,
+    first_prompt_id: String,
     skip_prompts: bool,
     child: Child,
     stdout_lines: tokio::io::Lines<BufReader<crate::process::ChildStdout>>,
@@ -832,6 +861,7 @@ struct Session {
 async fn run_session(session: Session) {
     let Session {
         normalizer: mut norm,
+        first_prompt_id,
         skip_prompts,
         mut child,
         mut stdout_lines,
@@ -855,6 +885,7 @@ async fn run_session(session: Session) {
     let mut permission_open = true;
 
     let mut pending_steers = std::collections::VecDeque::new();
+    let mut unrecorded_prompts = HashSet::from([first_prompt_id]);
     let mut open_tools = HashSet::new();
     let mut steering_open = true;
     let mut interrupted = false;
@@ -902,6 +933,12 @@ async fn run_session(session: Session) {
                         continue;
                     }
                     if let Frame::User(ref user) = frame {
+                        if user.parent_tool_use_id.is_none()
+                            && let Some(id) = user.uuid.as_ref().filter(|id| unrecorded_prompts.remove(*id))
+                            && event_tx.send(Ok(AgentEvent::PromptRecorded { id: id.clone() })).await.is_err()
+                        {
+                            break 'main;
+                        }
                         // Superseded steers are never replayed, so a replay confirms every earlier steer.
                         if user.parent_tool_use_id.is_none()
                             && let Some(at) = user
@@ -975,6 +1012,7 @@ async fn run_session(session: Session) {
                         &id,
                         open_tools.is_empty(),
                     );
+                    unrecorded_prompts.insert(id.clone());
                     pending_steers.push_back(id);
                     if stdin_tx.send(StdinMsg::Line(line)).is_err() { break 'main; }
                 }
@@ -1463,6 +1501,7 @@ mod tests {
             skills: Vec::new(),
             auto_compact_tokens: None,
             chrome: false,
+            drop_prompt: None,
         };
         assert!(flag_settings(&request).is_empty());
         request.auto_compact_tokens = Some(150_000);
@@ -1487,6 +1526,7 @@ mod tests {
             skills: Vec::new(),
             auto_compact_tokens: None,
             chrome: true,
+            drop_prompt: None,
         };
         let harness = ClaudeHarness::new();
         let args = |request: &RunRequest| -> Vec<String> {

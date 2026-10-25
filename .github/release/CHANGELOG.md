@@ -7,7 +7,11 @@ release body.
 
 ## Unreleased
 
+- Line breaks in agent replies now show as written instead of running lines together.
 - Typing `@` in an agent chat now shows more relevant file suggestions.
+- Images in agent chats can now be downloaded.
+- Fixed Perso-Arabic script and other text with raised or lowered letters looking scrambled on macOS.
+- If you stop an agent right after sending a message, you can now edit the message and send it again, as long as the agent hasn't changed anything yet.
 
 ## 1.1.10 - 2026-10-24
 

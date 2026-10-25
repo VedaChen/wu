@@ -143,6 +143,9 @@ pub struct RunRequest {
     /// Lets Claude Code use the browser through the Claude in Chrome extension.
     #[serde(default)]
     pub chrome: bool,
+    /// A `PromptRecorded` id: the agent forgets that prompt and everything after it before this run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drop_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -508,6 +511,10 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     UserMessage {
         text: String,
+    },
+    /// The agent saved a prompt the chat sent, under this id of its own.
+    PromptRecorded {
+        id: String,
     },
     TitleChanged {
         title: String,

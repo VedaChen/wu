@@ -2594,6 +2594,74 @@ async fn agent_selection_on_create_and_resume() {
     }
 }
 
+#[tokio::test]
+async fn a_dropped_prompt_is_reverted_and_new_prompts_report_their_ids() {
+    for v2 in [false, true] {
+        let mut wire = TurnWire::start_config(
+            v2,
+            "2.0.11",
+            json!({ "resume": "fixture", "dropPrompt": "msg_typo" }),
+        )
+        .await;
+        if v2 {
+            wire.request("/api/model").await;
+        }
+        wire.request(if v2 { "/prompt" } else { "/prompt_async" })
+            .await;
+        let reverts: Vec<(String, Value)> = wire
+            .posts
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.contains("/revert"))
+            .cloned()
+            .collect();
+        let expected = if v2 {
+            vec![
+                (
+                    "/api/session/fixture/revert/stage".to_string(),
+                    json!({ "messageID": "msg_typo" }),
+                ),
+                (
+                    "/api/session/fixture/revert/commit".to_string(),
+                    Value::Null,
+                ),
+            ]
+        } else {
+            vec![(
+                "/session/fixture/revert".to_string(),
+                json!({ "messageID": "msg_typo" }),
+            )]
+        };
+        assert_eq!(reverts, expected);
+
+        if v2 {
+            let delivered = json!({ "sessionID": "fixture", "inboxID": "msg_new" });
+            wire.v2("session.inbox.delivered", delivered.clone());
+            wire.v2("session.inbox.delivered", delivered);
+        } else {
+            let user = json!({"type": "message.updated", "properties": {"info": {"sessionID": "fixture", "id": "msg_new", "role": "user"}}});
+            wire.bus.send(user.clone()).unwrap();
+            wire.bus.send(user).unwrap();
+        }
+        let mut recorded = Vec::new();
+        while recorded.is_empty() {
+            if let AgentEvent::PromptRecorded { id } = wire.next_event().await {
+                recorded.push(id);
+            }
+        }
+        wire.interrupt.cancel();
+        loop {
+            match wire.next_event().await {
+                AgentEvent::PromptRecorded { id } => recorded.push(id),
+                AgentEvent::Done { .. } => break,
+                _ => {}
+            }
+        }
+        assert_eq!(recorded, ["msg_new"], "v2: {v2}");
+    }
+}
+
 #[test]
 fn v2_status_retry_and_progress_vocabulary() {
     let mut names = HashMap::new();

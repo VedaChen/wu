@@ -119,6 +119,7 @@ const SUBAGENT_SPINNER_CELL: f32 = 2.;
 const SUBAGENT_SPINNER_DIM: f32 = 0.1;
 const SUBAGENT_SPINNER_PERIOD: Duration = Duration::from_millis(750);
 const COPIED_FEEDBACK: Duration = Duration::from_millis(1200);
+const DOWNLOADED_FEEDBACK: Duration = Duration::from_secs(3);
 const AUTO_ADVANCE: Duration = Duration::from_millis(220);
 const USAGE_POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const GROUP_SHIMMER: Duration = Duration::from_millis(3400);
@@ -731,9 +732,13 @@ impl ChatView {
 
     fn copy(&mut self, key: SharedString, text: String, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
+        self.show_done(key, COPIED_FEEDBACK, cx);
+    }
+
+    fn show_done(&mut self, key: SharedString, duration: Duration, cx: &mut Context<Self>) {
         self.copied = Some(key.clone());
         self._copied_reset = cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(COPIED_FEEDBACK).await;
+            cx.background_executor().timer(duration).await;
             this.update(cx, |this, cx| {
                 if this.copied.as_ref() == Some(&key) {
                     this.copied = None;
@@ -753,6 +758,7 @@ impl ChatView {
         style.base_text_style.line_height = ui(22.).into();
         style.base_text_style.color = colors.text;
         style.paragraph_spacing = px(MD_BLOCK_GAP);
+        style.soft_break_as_hard_break = true;
         style.list_spacing = px(MD_BLOCK_GAP);
         style.table_cell_padding = point(px(12.), px(12.));
         style.container_style.margin.bottom = Some(px(-MD_BLOCK_GAP).into());
@@ -1213,6 +1219,7 @@ impl ChatView {
         group: SharedString,
         at: i64,
         copy: Option<(SharedString, CopySource)>,
+        editable: bool,
         align_end: bool,
         cx: &Context<Self>,
     ) -> impl IntoElement {
@@ -1239,6 +1246,25 @@ impl ChatView {
                                 .text_size(ui(12.))
                                 .text_color(muted.opacity(0.55))
                                 .child(timestamp),
+                        )
+                    })
+                    .when(editable, |this| {
+                        this.child(
+                            div()
+                                .id("edit-last-message")
+                                .size(px(SPACE_MD * 2.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(6.))
+                                .cursor_pointer()
+                                .hover(|style| style.bg(ink(0.08, cx)))
+                                .tooltip(Tooltip::text("Edit message"))
+                                .child(icon(IconName::AgentPen, 14.).text_color(muted))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.edit_last_message(window, cx)
+                                })),
                         )
                     })
                     .when_some(copy, |this, (copy_key, copy_source)| {
@@ -1319,6 +1345,8 @@ impl ChatView {
         };
         let text = text.clone();
         let attachments = attachments.clone();
+        let editable =
+            self.subagent.is_none() && self.session.read(cx).editable_message() == Some(index);
         let line_count = text.lines().count();
         let collapsible =
             line_count > USER_COLLAPSED_LINES || text.chars().count() > USER_COLLAPSE_CHARS;
@@ -1445,7 +1473,7 @@ impl ChatView {
                         )
                     }),
             )
-            .child(self.hover_strip(group, *at, copy, true, cx))
+            .child(self.hover_strip(group, *at, copy, editable, true, cx))
             .into_any_element()
     }
 
@@ -1660,10 +1688,49 @@ impl ChatView {
                 }
                 Entry::Image { path } => {
                     let path = path.clone();
+                    let group = SharedString::from(format!("agent-generated-image-{index}"));
+                    let download = {
+                        let image = image_viewer::ChatImage::File(path.clone());
+                        let downloaded = self.copied.as_ref() == Some(&image.download_key());
+                        div()
+                            .id(("agent-generated-image-download", index))
+                            .absolute()
+                            .top(px(8.))
+                            .right(px(8.))
+                            .size(px(28.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_full()
+                            .bg(gpui::hsla(0., 0., 0., 0.55))
+                            .cursor_pointer()
+                            .hover(|style| style.bg(gpui::hsla(0., 0., 0., 0.75)))
+                            .when(!downloaded, |this| this.visible_on_hover(group.clone()))
+                            .tooltip(Tooltip::text(if downloaded {
+                                "Saved to Downloads"
+                            } else {
+                                "Download"
+                            }))
+                            .child(
+                                ui::Icon::new(if downloaded {
+                                    IconName::Check
+                                } else {
+                                    IconName::Download
+                                })
+                                .size(ui::IconSize::Small)
+                                .color(Color::Custom(gpui::white())),
+                            )
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.download_image(image.clone(), window, cx)
+                            }))
+                    };
                     rows.push((
                         TranscriptRow::Other,
                         div()
                             .id(("agent-generated-image", index))
+                            .group(group)
+                            .relative()
                             .max_w(px(GENERATED_IMAGE_MAX_WIDTH))
                             .max_h(px(GENERATED_IMAGE_MAX_HEIGHT))
                             .flex()
@@ -1680,6 +1747,7 @@ impl ChatView {
                                     .rounded(px(12.))
                                     .object_fit(ObjectFit::Contain),
                             )
+                            .child(download)
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.open_image(path.clone(), window, cx)
                             }))
@@ -1728,7 +1796,7 @@ impl ChatView {
             .w_full()
             .children(rows)
             .when(show_strip, |this| {
-                this.child(self.hover_strip(group, last_at, copy, false, cx))
+                this.child(self.hover_strip(group, last_at, copy, false, false, cx))
             })
             .when(is_working && is_last_turn, |this| {
                 this.child(self.render_working_trailer(cx))
@@ -3710,6 +3778,51 @@ mod tests {
             })
         });
         assert_eq!(composer_text(&view, cx), "look at ");
+    }
+
+    #[gpui::test]
+    async fn editing_a_stopped_message_puts_it_back_in_the_input(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let project = project::Project::test(FakeFs::new(cx.executor()), [], cx).await;
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+        });
+        crate::session::tests::feed_stopped_turn(
+            &session,
+            "fix teh bug",
+            1,
+            ToolCall::Glob {
+                pattern: "*.rs".into(),
+            },
+            cx,
+        );
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            ChatView::new(
+                session.clone(),
+                store.clone(),
+                project,
+                WeakEntity::new_invalid(),
+                window,
+                cx,
+            )
+        });
+        view.update_in(cx, |view, window, cx| {
+            view.composer
+                .update(cx, |editor, cx| editor.set_text("and the docs", window, cx));
+            view.edit_last_message(window, cx);
+        });
+        assert_eq!(composer_text(&view, cx), "fix teh bug\n\nand the docs");
+        assert!(session.read_with(cx, |session, _| session.entries().is_empty()));
+        assert_eq!(
+            session.read_with(cx, |session, _| session.editable_message()),
+            None
+        );
     }
 
     #[gpui::test]

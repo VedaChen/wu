@@ -49,6 +49,7 @@ fn request(prompt: &str) -> RunRequest {
         skills: Vec::new(),
         auto_compact_tokens: None,
         chrome: false,
+        drop_prompt: None,
     }
 }
 
@@ -577,6 +578,38 @@ async fn resume_reuses_the_existing_thread() {
         )),
         "resumed thread expected: {events:?}"
     );
+}
+
+#[tokio::test]
+async fn a_dropped_turn_is_reverted_before_the_next_prompt() {
+    for (thread, problem) in [("drop-ok", false), ("drop-fails", true)] {
+        let (controls, _steer, _token) = controls("Yes");
+        let mut req = request("scenario:resumed");
+        req.resume = Some(thread.into());
+        req.drop_prompt = Some("t-typo".into());
+        let events = run_to_end(&harness(), req, controls).await;
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, AgentEvent::PromptRecorded { id } if id == "t-1")),
+            "the new turn reports its id: {events:?}"
+        );
+        assert_eq!(
+            events.iter().any(|e| matches!(
+                e,
+                AgentEvent::Error { message } if message.contains("couldn't forget your earlier message")
+            )),
+            problem,
+            "{thread}: {events:?}"
+        );
+        assert!(matches!(
+            events.last(),
+            Some(AgentEvent::Done {
+                status: DoneStatus::Completed,
+                ..
+            })
+        ));
+    }
 }
 
 #[tokio::test]

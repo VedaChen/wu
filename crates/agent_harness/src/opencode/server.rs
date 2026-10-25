@@ -572,6 +572,40 @@ impl Server {
         self.post_json(&path, directory, &Value::Null).await
     }
 
+    /// Forgets `message_id` and every later message of the session.
+    pub(super) async fn revert_to(
+        &self,
+        session_id: &str,
+        message_id: &str,
+        directory: Option<&str>,
+    ) -> Result<(), HarnessError> {
+        match self.protocol().await {
+            Protocol::V1 => {
+                self.post_json(
+                    &format!("/session/{session_id}/revert"),
+                    directory,
+                    &json!({ "messageID": message_id }),
+                )
+                .await?;
+            }
+            Protocol::V2 => {
+                self.post_json(
+                    &format!("/api/session/{session_id}/revert/stage"),
+                    directory,
+                    &json!({ "messageID": message_id }),
+                )
+                .await?;
+                self.post_json(
+                    &format!("/api/session/{session_id}/revert/commit"),
+                    directory,
+                    &Value::Null,
+                )
+                .await?;
+            }
+        }
+        Ok(())
+    }
+
     pub(super) async fn set_model(
         &self,
         session_id: &str,

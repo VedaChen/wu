@@ -52,6 +52,7 @@ fn request(prompt: &str) -> RunRequest {
         skills: Vec::new(),
         auto_compact_tokens: None,
         chrome: false,
+        drop_prompt: None,
     }
 }
 
@@ -92,6 +93,67 @@ async fn run_to_end(
     )
     .await
     .expect("run finished in time")
+}
+
+#[tokio::test]
+async fn a_dropped_prompt_resumes_the_chat_just_before_it() {
+    let config = tempfile::tempdir().expect("temporary directory");
+    let project = config.path().join("projects").join("-tmp");
+    std::fs::create_dir_all(&project).expect("project dir");
+    let records = [
+        r#"{"type":"user","uuid":"ask","parentUuid":null,"message":{"content":"hi"}}"#,
+        r#"{"type":"assistant","uuid":"answer","parentUuid":"ask","message":{"content":[]}}"#,
+        r#"{"type":"system","uuid":"timing","parentUuid":"answer"}"#,
+        r#"{"type":"user","uuid":"typo","parentUuid":"timing","message":{"content":"fix teh bug"}}"#,
+    ];
+    std::fs::write(project.join("sess-drop.jsonl"), records.join("\n")).expect("chat file");
+    let harness = ClaudeHarness::new()
+        .with_executable(fixture_path())
+        .with_config_dir(config.path());
+    let reply = |events: &[AgentEvent]| -> String {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                AgentEvent::TextDelta { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect()
+    };
+
+    let events = run_to_end(&harness, request("scenario:drop"), controls("Allow").0).await;
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, AgentEvent::PromptRecorded { id } if !id.is_empty())),
+        "the replayed prompt reports its id: {events:?}"
+    );
+    assert_eq!(reply(&events), "fresh");
+
+    let mut dropping = request("scenario:drop");
+    dropping.resume = Some("sess-drop".into());
+    dropping.drop_prompt = Some("typo".into());
+    let events = run_to_end(&harness, dropping, controls("Allow").0).await;
+    assert_eq!(reply(&events), "at answer");
+
+    let mut first = request("scenario:drop");
+    first.resume = Some("sess-drop".into());
+    first.drop_prompt = Some("ask".into());
+    let events = run_to_end(&harness, first, controls("Allow").0).await;
+    assert_eq!(
+        reply(&events),
+        "fresh",
+        "dropping the first prompt starts over"
+    );
+
+    let mut missing = request("scenario:drop");
+    missing.resume = Some("sess-drop".into());
+    missing.drop_prompt = Some("gone".into());
+    let events = run_to_end(&harness, missing, controls("Allow").0).await;
+    assert_eq!(reply(&events), "whole");
+    assert!(events.iter().any(|event| matches!(
+        event,
+        AgentEvent::Error { message } if message.contains("couldn't find your earlier message")
+    )));
 }
 
 #[tokio::test]

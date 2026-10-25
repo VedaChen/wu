@@ -259,6 +259,7 @@ fn request(prompt: &str) -> RunRequest {
         skills: Vec::new(),
         auto_compact_tokens: None,
         chrome: false,
+        drop_prompt: None,
     }
 }
 

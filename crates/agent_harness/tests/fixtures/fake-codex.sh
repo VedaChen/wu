@@ -53,6 +53,15 @@ if has "$line" '"method":"thread/resume"'; then
   else
     emit "{\"id\":$(rid "$line"),\"result\":{\"thread\":{\"id\":\"th-resumed\"}}}"
   fi
+  if has "$line" '"threadId":"drop-'; then
+    read -r revertline || exit 1
+    has "$revertline" '"method":"thread/revert"' && has "$revertline" '"beforeTurnId":"t-typo"' || exit 1
+    if has "$line" '"threadId":"drop-fails"'; then
+      emit "{\"id\":$(rid "$revertline"),\"error\":{\"code\":-32600,\"message\":\"thread is not paginated\"}}"
+    else
+      emit "{\"id\":$(rid "$revertline"),\"result\":{\"thread\":{\"id\":\"th-resumed\",\"turns\":[]}}}"
+    fi
+  fi
 elif has "$line" '"method":"thread/fork"'; then
   has "$line" '"threadId":"fork-source"' || exit 1
   emit "{\"id\":$(rid "$line"),\"result\":{\"thread\":{\"id\":\"th-forked\"}}}"

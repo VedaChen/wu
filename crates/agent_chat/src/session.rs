@@ -189,6 +189,9 @@ pub struct SessionMetadata {
     pub project_root: Option<PathBuf>,
     #[serde(default)]
     pub branch: Option<String>,
+    /// The agent's id for a message taken back to edit, forgotten by the agent on the next run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_prompt: Option<String>,
 }
 
 impl SessionMetadata {
@@ -213,6 +216,7 @@ impl SessionMetadata {
             unseen: false,
             project_root: None,
             branch: None,
+            dropped_prompt: None,
         }
     }
 
@@ -247,7 +251,7 @@ impl Prompt {
         self.text.trim().is_empty() && self.attachments.is_empty()
     }
 
-    fn merge(&mut self, other: Prompt) {
+    pub fn merge(&mut self, other: Prompt) {
         if !other.text.trim().is_empty() {
             if !self.text.trim().is_empty() {
                 self.text.push_str("\n\n");
@@ -581,6 +585,18 @@ impl Transcript {
     }
 }
 
+fn changes_nothing(call: &ToolCall) -> bool {
+    matches!(
+        call,
+        ToolCall::ReadFile { .. }
+            | ToolCall::Search { .. }
+            | ToolCall::Glob { .. }
+            | ToolCall::WebFetch { .. }
+            | ToolCall::WebSearch { .. }
+            | ToolCall::Todo { .. }
+    )
+}
+
 fn new_markdown(text: String, languages: &Arc<LanguageRegistry>, cx: &mut App) -> Entity<Markdown> {
     let languages = languages.clone();
     cx.new(|cx| Markdown::new(text.into(), Some(languages), None, cx))
@@ -748,6 +764,9 @@ pub struct AgentSession {
     run: Option<ActiveRun>,
     prompt_after_stop: Option<Prompt>,
     user_stopped: bool,
+    turn_prompts: usize,
+    turn_prompt_id: Option<String>,
+    editable_prompt: Option<String>,
     queue: Vec<QueuedMessage>,
     next_queue_id: u64,
     editing_queued: Option<u64>,
@@ -809,6 +828,9 @@ impl AgentSession {
             run: None,
             prompt_after_stop: None,
             user_stopped: false,
+            turn_prompts: 0,
+            turn_prompt_id: None,
+            editable_prompt: None,
             queue: saved_queue
                 .into_iter()
                 .enumerate()
@@ -1104,6 +1126,56 @@ impl AgentSession {
         cx.notify();
     }
 
+    /// The last message, once the user stops its turn before the agent changed anything.
+    pub fn editable_message(&self) -> Option<usize> {
+        if self.editable_prompt.is_none() || self.working {
+            return None;
+        }
+        let index = self.last_user_index()?;
+        self.transcript.entries[index + 1..]
+            .iter()
+            .all(|entry| match entry {
+                Entry::Tool(tool) => changes_nothing(&tool.call),
+                _ => true,
+            })
+            .then_some(index)
+    }
+
+    pub fn edit_last_message(&mut self, cx: &mut Context<Self>) -> Option<Prompt> {
+        let index = self.editable_message()?;
+        let Some(Entry::User {
+            text,
+            attachments,
+            skills,
+            ..
+        }) = self.transcript.entries.get(index)
+        else {
+            return None;
+        };
+        let prompt = Prompt {
+            text: text.to_string(),
+            attachments: attachments.clone(),
+            skills: skills.clone(),
+        };
+        self.transcript.entries.truncate(index);
+        self.transcript.text_block_open = false;
+        self.metadata.dropped_prompt = self.editable_prompt.take();
+        if self.last_user_index().is_none() && self.metadata.title == title_from(&prompt.text) {
+            self.metadata.title.clear();
+        }
+        self.save_metadata(cx);
+        self.save_entries(cx);
+        cx.notify();
+        Some(prompt)
+    }
+
+    fn last_user_index(&self) -> Option<usize> {
+        self.transcript
+            .entries
+            .iter()
+            .rposition(|entry| matches!(entry, Entry::User { .. }))
+    }
+
     pub fn retry_undelivered(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(Entry::User {
             text,
@@ -1155,7 +1227,9 @@ impl AgentSession {
             return;
         }
         self.user_stopped = false;
-        if self.restart_on_next_send && !self.working {
+        self.editable_prompt = None;
+        let new_turn = !self.working;
+        if (self.restart_on_next_send || self.metadata.dropped_prompt.is_some()) && !self.working {
             self.run = None;
             self.restart_on_next_send = false;
         }
@@ -1191,6 +1265,12 @@ impl AgentSession {
                 skills: prompt.skills.clone(),
             };
             if run.steering.try_send(steer).is_ok() {
+                if new_turn {
+                    self.turn_prompts = 1;
+                    self.turn_prompt_id = None;
+                } else {
+                    self.turn_prompts += 1;
+                }
                 cx.notify();
                 return;
             }
@@ -1289,6 +1369,12 @@ impl AgentSession {
 
     fn start_run(&mut self, prompt: Prompt, cx: &mut Context<Self>) {
         self.restart_on_next_send = false;
+        self.turn_prompts = 1;
+        self.turn_prompt_id = None;
+        let drop_prompt = self.metadata.dropped_prompt.take();
+        if drop_prompt.is_some() {
+            self.save_metadata(cx);
+        }
         let harness = self.harness.clone();
         if self.metadata.native_session_id.is_none() {
             self.metadata.context = None;
@@ -1332,6 +1418,7 @@ impl AgentSession {
             fork,
             auto_compact_tokens: self.auto_compact_tokens(cx),
             chrome: AgentChatSettings::get_global(cx).claude_in_chrome,
+            drop_prompt,
         };
         let (steering_tx, steering_rx) = tokio::sync::mpsc::channel(32);
         let interrupt = CancellationToken::new();
@@ -1600,7 +1687,11 @@ impl AgentSession {
                         self.metadata.unseen = true;
                         cx.emit(SessionEvent::Finished { errored: false });
                     }
-                    DoneStatus::Interrupted => {}
+                    DoneStatus::Interrupted => {
+                        if self.user_stopped && self.turn_prompts == 1 {
+                            self.editable_prompt = self.turn_prompt_id.clone();
+                        }
+                    }
                     DoneStatus::Errored => {
                         self.run_failed = true;
                         self.metadata.outcome = Some(ChatOutcome::Errored);
@@ -1617,6 +1708,9 @@ impl AgentSession {
                 if status != DoneStatus::Interrupted {
                     self.send_next_queued(cx);
                 }
+            }
+            AgentEvent::PromptRecorded { id } => {
+                self.turn_prompt_id.get_or_insert(id);
             }
             AgentEvent::TitleChanged { title } => self.adopt_agent_title(&title, cx),
             AgentEvent::GeneratedImage { path, .. } => {
@@ -1721,6 +1815,7 @@ impl AgentSession {
     /// The agent can start a turn on its own after a background command or subagent finishes.
     fn resume_working(&mut self) {
         if !self.working {
+            self.editable_prompt = None;
             self.working = true;
             self.working_since = Some(Instant::now());
         }
@@ -4111,6 +4206,73 @@ done
     }
 
     #[gpui::test]
+    async fn a_stopped_message_can_be_edited_until_the_agent_changes_something(
+        cx: &mut TestAppContext,
+    ) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+        });
+        let stopped_turn = |session: &Entity<AgentSession>, prompts, call, cx: &mut _| {
+            feed_stopped_turn(session, "fix teh bug", prompts, call, cx)
+        };
+        let read = || ToolCall::ReadFile {
+            path: "src/main.rs".into(),
+        };
+        let editable = |cx: &mut TestAppContext| {
+            session.read_with(cx, |session, _| session.editable_message())
+        };
+
+        stopped_turn(&session, 1, read(), cx);
+        assert_eq!(editable(cx), Some(0));
+        let prompt = session.update(cx, |session, cx| session.edit_last_message(cx));
+        assert_eq!(
+            prompt.map(|prompt| prompt.text),
+            Some("fix teh bug".to_string())
+        );
+        session.read_with(cx, |session, _| {
+            assert!(session.entries().is_empty());
+            assert_eq!(
+                session.metadata().dropped_prompt.as_deref(),
+                Some("prompt-1")
+            );
+            assert_eq!(session.metadata().title, "");
+        });
+
+        session.update(cx, |session, _| session.transcript.entries.clear());
+        stopped_turn(
+            &session,
+            1,
+            ToolCall::Exec {
+                command: "rm -rf build".into(),
+            },
+            cx,
+        );
+        assert_eq!(editable(cx), None);
+
+        session.update(cx, |session, _| session.transcript.entries.clear());
+        stopped_turn(&session, 2, read(), cx);
+        assert_eq!(
+            editable(cx),
+            None,
+            "a steered turn holds more than the last message"
+        );
+
+        session.update(cx, |session, _| session.transcript.entries.clear());
+        stopped_turn(&session, 1, read(), cx);
+        session.update(cx, |session, cx| session.send_message("scenario:happy", cx));
+        assert_eq!(editable(cx), None);
+        session.read_with(cx, |session, _| {
+            assert_eq!(
+                session.metadata().dropped_prompt,
+                None,
+                "the next run forgets it"
+            );
+        });
+    }
+
+    #[gpui::test]
     async fn a_turn_the_agent_starts_on_its_own_counts_as_working(cx: &mut TestAppContext) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let store = new_store(directory.path(), cx);
@@ -4314,6 +4476,47 @@ done
                 session.apply_event(event, cx);
             }
         });
+    }
+
+    pub(crate) fn feed_stopped_turn(
+        session: &Entity<AgentSession>,
+        text: &str,
+        prompts: usize,
+        call: ToolCall,
+        cx: &mut TestAppContext,
+    ) {
+        session.update(cx, |session, _| {
+            session
+                .transcript
+                .push_user(text.into(), Vec::new(), Vec::new());
+            session.metadata.title = title_from(text);
+            session.turn_prompts = prompts;
+            session.turn_prompt_id = None;
+            session.editable_prompt = None;
+            session.user_stopped = true;
+        });
+        feed_events(
+            session,
+            vec![
+                AgentEvent::PromptRecorded {
+                    id: "prompt-1".into(),
+                },
+                AgentEvent::PromptRecorded {
+                    id: "prompt-2".into(),
+                },
+                AgentEvent::ToolCall {
+                    id: "tool-1".into(),
+                    call,
+                },
+                AgentEvent::Done {
+                    status: DoneStatus::Interrupted,
+                    result: None,
+                    error: None,
+                    session_id: None,
+                },
+            ],
+            cx,
+        );
     }
 
     pub(crate) fn feed_subagent(session: &Entity<AgentSession>, cx: &mut TestAppContext) {
