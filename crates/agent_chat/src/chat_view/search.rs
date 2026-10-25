@@ -64,7 +64,7 @@ impl ChatView {
         self.search.highlighted.push(markdown.clone());
     }
 
-    fn turn_for_entry(&self, entry: usize) -> Option<usize> {
+    pub(super) fn turn_for_entry(&self, entry: usize) -> Option<usize> {
         self.turns
             .iter()
             .position(|turn| turn.user == Some(entry) || turn.items.contains(&entry))

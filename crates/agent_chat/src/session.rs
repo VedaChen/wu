@@ -2064,6 +2064,17 @@ pub struct ChatListPrefs {
     pub collapsed_sections: Vec<String>,
     pub favorite_models: Vec<String>,
     pub dictation_device: Option<String>,
+    pub saved_messages: Vec<SavedMessage>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedMessage {
+    pub chat_id: String,
+    /// Where the message was in its chat; checked against `text` because chats can drop messages.
+    pub entry: usize,
+    pub text: String,
+    pub from_agent: bool,
+    pub saved_at: i64,
 }
 
 impl ChatListPrefs {
@@ -2969,6 +2980,41 @@ impl AgentStore {
         cx.notify();
     }
 
+    pub fn is_message_saved(&self, chat_id: &str, entry: usize, text: &str) -> bool {
+        self.list_prefs
+            .saved_messages
+            .iter()
+            .any(|saved| saved.chat_id == chat_id && saved.entry == entry && saved.text == text)
+    }
+
+    pub fn toggle_saved_message(
+        &mut self,
+        chat_id: &str,
+        entry: usize,
+        text: String,
+        from_agent: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let saved = self.is_message_saved(chat_id, entry, &text);
+        self.update_list_prefs(
+            |prefs| {
+                prefs
+                    .saved_messages
+                    .retain(|message| !(message.chat_id == chat_id && message.entry == entry));
+                if !saved {
+                    prefs.saved_messages.push(SavedMessage {
+                        chat_id: chat_id.to_string(),
+                        entry,
+                        text,
+                        from_agent,
+                        saved_at: now(),
+                    });
+                }
+            },
+            cx,
+        );
+    }
+
     pub fn update_session_metadata(
         &mut self,
         id: &str,
@@ -3249,6 +3295,17 @@ impl AgentStore {
             .unwrap_or_default();
         pending_writes.extend(self.metadata_writes.remove(id));
         self.sessions.retain(|metadata| metadata.id != id);
+        if self
+            .list_prefs
+            .saved_messages
+            .iter()
+            .any(|message| message.chat_id == id)
+        {
+            self.update_list_prefs(
+                |prefs| prefs.saved_messages.retain(|message| message.chat_id != id),
+                cx,
+            );
+        }
         let id = id.to_string();
         let directory = self.directory.clone();
         cx.background_spawn(async move {
@@ -5084,6 +5141,47 @@ done
             assert_eq!(summary.title.as_ref(), "Renamed");
             assert!(summary.pinned);
         });
+    }
+
+    #[gpui::test]
+    async fn saved_messages_toggle_persist_and_leave_with_their_chat(cx: &mut TestAppContext) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        cx.run_until_parked();
+        let id = store.update(cx, |store, cx| {
+            let session =
+                store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx);
+            session.read(cx).metadata().id.clone()
+        });
+        store.update(cx, |store, cx| {
+            store.toggle_saved_message(&id, 0, "fix the bug".into(), false, cx);
+            store.toggle_saved_message(&id, 1, "Fixed it.".into(), true, cx);
+            store.toggle_saved_message(&id, 1, "Fixed it.".into(), true, cx);
+            store.toggle_saved_message(&id, 3, "Old reply".into(), true, cx);
+            store.toggle_saved_message(&id, 3, "Old reply, then more".into(), true, cx);
+        });
+        cx.run_until_parked();
+        let saved = |store: &Entity<AgentStore>, cx: &mut TestAppContext| {
+            store.read_with(cx, |store, _| {
+                store
+                    .list_prefs()
+                    .saved_messages
+                    .iter()
+                    .map(|message| (message.entry, message.text.clone()))
+                    .collect::<Vec<_>>()
+            })
+        };
+        let expected = vec![
+            (0, "fix the bug".to_string()),
+            (3, "Old reply, then more".to_string()),
+        ];
+        assert_eq!(saved(&store, cx), expected);
+        let reopened = new_store(directory.path(), cx);
+        cx.run_until_parked();
+        assert_eq!(saved(&reopened, cx), expected);
+
+        reopened.update(cx, |store, cx| store.delete_session(&id, cx));
+        assert!(saved(&reopened, cx).is_empty());
     }
 
     #[test]

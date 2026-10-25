@@ -32,6 +32,8 @@ use workspace::{
     notifications::NotificationId,
 };
 
+mod saved_messages;
+
 const AGENT_PANEL_KEY: &str = "AgentPanel";
 
 const SPACE_SM: f32 = 8.0;
@@ -198,6 +200,7 @@ pub struct AgentPanel {
     row_menu: Option<RowMenu>,
     hovered_row: Option<SharedString>,
     list_scroll: ScrollHandle,
+    showing_saved: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -245,6 +248,7 @@ impl AgentPanel {
                     row_menu: None,
                     hovered_row: None,
                     list_scroll: ScrollHandle::new(),
+                    showing_saved: false,
                 }
             })
         })
@@ -513,6 +517,19 @@ impl AgentPanel {
             })
     }
 
+    fn toggle_saved_messages(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.showing_saved = !self.showing_saved;
+        let placeholder = if self.showing_saved {
+            "Search saved messages…"
+        } else {
+            "Search chats…"
+        };
+        self.search.update(cx, |editor, cx| {
+            editor.set_placeholder_text(placeholder, window, cx)
+        });
+        cx.notify();
+    }
+
     fn render_toolbar(&self, cx: &Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors();
         v_flex()
@@ -533,7 +550,32 @@ impl AgentPanel {
                             .text_size(ui(13.))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(colors.text.opacity(0.8))
-                            .child(faded_label("agent-panel-title", false, "Chats")),
+                            .child(faded_label(
+                                "agent-panel-title",
+                                false,
+                                if self.showing_saved {
+                                    "Saved Messages"
+                                } else {
+                                    "Chats"
+                                },
+                            )),
+                    )
+                    .child(
+                        HeaderButton::new(
+                            "agent-panel-saved-messages",
+                            IconName::Bookmark,
+                            if self.showing_saved {
+                                "Back to Chats"
+                            } else {
+                                "Saved Messages"
+                            },
+                        )
+                        .toggle_state(self.showing_saved)
+                        .on_click(
+                            cx.listener(|this, _, window, cx| {
+                                this.toggle_saved_messages(window, cx)
+                            }),
+                        ),
                     )
                     .child(self.new_chat_menu()),
             )
@@ -1626,7 +1668,9 @@ impl Render for AgentPanel {
             .read(cx)
             .sessions_in(&chat_roots(&self.project, cx), cx)
             .is_empty();
-        let body: AnyElement = if has_any {
+        let body: AnyElement = if self.showing_saved {
+            self.render_saved_messages(cx)
+        } else if has_any {
             let active: Option<AnyElement> = if list.active.is_empty() {
                 Some(
                     div()

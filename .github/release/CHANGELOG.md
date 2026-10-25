@@ -7,13 +7,13 @@ release body.
 
 ## Unreleased
 
-- Wu Dark has a new look with a solid background, softer text colors and a periwinkle accent. Code colors are unchanged.
-- Added the Wu Dark Translucent theme, which keeps the see-through look of the previous Wu Dark.
-- Line breaks in agent replies now show as written instead of running lines together.
+- You can now save important messages in agent chats for later.
+- Wu Dark has a new solid look with softer colors. Previous Wu Dark is now `Wu Dark Translucent`.
 - Typing `@` in an agent chat now shows more relevant file suggestions.
 - Images in agent chats can now be downloaded.
 - Fixed Perso-Arabic script and other text with raised or lowered letters looking scrambled on macOS.
-- If you stop an agent right after sending a message, you can now edit the message and send it again, as long as the agent hasn't changed anything yet.
+- Cancelled messages can be edited and sent again, as long as the agent didn't make any changes.
+- Line breaks in agent replies now show as written instead of running lines together.
 
 ## 1.1.10 - 2026-10-24
 

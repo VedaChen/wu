@@ -17,6 +17,8 @@ pub enum IconName {
     AgentArrowRight,
     AgentArrowUp,
     AgentArrowUpRight,
+    AgentBookmark,
+    AgentBookmarkFilled,
     AgentBot,
     AgentChatRoundLine,
     AgentCheck,

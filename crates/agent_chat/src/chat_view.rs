@@ -120,6 +120,7 @@ const SUBAGENT_SPINNER_DIM: f32 = 0.1;
 const SUBAGENT_SPINNER_PERIOD: Duration = Duration::from_millis(750);
 const COPIED_FEEDBACK: Duration = Duration::from_millis(1200);
 const DOWNLOADED_FEEDBACK: Duration = Duration::from_secs(3);
+const REVEALED_HIGHLIGHT: Duration = Duration::from_secs(2);
 const AUTO_ADVANCE: Duration = Duration::from_millis(220);
 const USAGE_POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const GROUP_SHIMMER: Duration = Duration::from_millis(3400);
@@ -199,8 +200,10 @@ pub struct ChatView {
     command_scroll: ScrollHandle,
     model_picker: PopoverMenuHandle<ModelPicker>,
     copied: Option<SharedString>,
+    revealed_turn: Option<usize>,
     flavour_seed: u64,
     _copied_reset: Task<()>,
+    _revealed_reset: Task<()>,
     _auto_advance: Task<()>,
     _poll_usage: Task<()>,
     _subscriptions: Vec<Subscription>,
@@ -372,8 +375,10 @@ impl ChatView {
             command_scroll: ScrollHandle::new(),
             model_picker: PopoverMenuHandle::default(),
             copied: None,
+            revealed_turn: None,
             flavour_seed: flavour,
             _copied_reset: Task::ready(()),
+            _revealed_reset: Task::ready(()),
             _auto_advance: Task::ready(()),
             _poll_usage: poll_usage,
             _subscriptions: subscriptions,
@@ -733,6 +738,64 @@ impl ChatView {
     fn copy(&mut self, key: SharedString, text: String, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.show_done(key, COPIED_FEEDBACK, cx);
+    }
+
+    /// Scrolls to a saved message, looking it up by its text if the chat has changed since.
+    pub(crate) fn reveal_message(
+        &mut self,
+        entry: usize,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.sync_turns(cx);
+        let count = self.entries(cx).len();
+        let Some(target) = std::iter::once(entry)
+            .chain(0..count)
+            .find(|index| self.saved_text_at(*index, cx).as_deref() == Some(text))
+        else {
+            return false;
+        };
+        let Some(turn) = self.turn_for_entry(target) else {
+            return false;
+        };
+        self.list.pause_following_tail();
+        self.list.scroll_to(gpui::ListOffset {
+            item_ix: turn,
+            offset_in_item: px(0.),
+        });
+        if matches!(self.entries(cx).get(target), Some(Entry::User { .. })) {
+            self.expanded_users.insert(target);
+        }
+        self.revealed_turn = Some(turn);
+        self._revealed_reset = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(REVEALED_HIGHLIGHT).await;
+            this.update(cx, |this, cx| {
+                this.revealed_turn = None;
+                cx.notify();
+            })
+            .ok();
+        });
+        cx.notify();
+        true
+    }
+
+    fn saved_text_at(&self, entry: usize, cx: &App) -> Option<String> {
+        let entries = self.entries(cx);
+        match entries.get(entry)? {
+            Entry::User { text, .. } => Some(text.to_string()),
+            Entry::Assistant { .. } => {
+                let turn = self.turns.get(self.turn_for_entry(entry)?)?;
+                let messages: Vec<usize> = turn
+                    .items
+                    .iter()
+                    .copied()
+                    .filter(|index| matches!(entries.get(*index), Some(Entry::Assistant { .. })))
+                    .collect();
+                (messages.first() == Some(&entry))
+                    .then(|| CopySource::Messages(messages).text(self, cx))
+            }
+            _ => None,
+        }
     }
 
     fn show_done(&mut self, key: SharedString, duration: Duration, cx: &mut Context<Self>) {
@@ -1175,6 +1238,9 @@ impl ChatView {
         let turn = v_flex()
             .relative()
             .w_full()
+            .when(self.revealed_turn == Some(turn_index), |this| {
+                this.rounded(px(12.)).bg(accent(cx).opacity(0.08))
+            })
             .child(
                 canvas(
                     move |bounds, _, _| {
@@ -1219,6 +1285,7 @@ impl ChatView {
         group: SharedString,
         at: i64,
         copy: Option<(SharedString, CopySource)>,
+        save: Option<SaveTarget>,
         editable: bool,
         align_end: bool,
         cx: &Context<Self>,
@@ -1236,10 +1303,11 @@ impl ChatView {
             .pt(px(SPACE_SM))
             .w_full()
             .when(align_end, |this| this.justify_end())
+            .gap(px(SPACE_SM))
             .child(
                 h_flex()
                     .gap(px(SPACE_SM))
-                    .visible_on_hover(group)
+                    .visible_on_hover(group.clone())
                     .when_some(timestamp, |this, timestamp| {
                         this.child(
                             div()
@@ -1299,6 +1367,57 @@ impl ChatView {
                         )
                     }),
             )
+            .when_some(save, |this, target| {
+                let chat_id = self.session.read(cx).metadata().id.clone();
+                let saved =
+                    self.store
+                        .read(cx)
+                        .is_message_saved(&chat_id, target.entry, &target.text);
+                this.child(
+                    div()
+                        .id(("save-message", target.entry))
+                        .size(px(SPACE_MD * 2.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(6.))
+                        .cursor_pointer()
+                        .visible_on_hover(group)
+                        .hover(|style| style.bg(ink(0.08, cx)))
+                        .tooltip(Tooltip::text(if saved {
+                            "Remove from saved"
+                        } else {
+                            "Save message"
+                        }))
+                        .child(
+                            icon(
+                                if saved {
+                                    IconName::AgentBookmarkFilled
+                                } else {
+                                    IconName::AgentBookmark
+                                },
+                                14.,
+                            )
+                            .text_color(if saved {
+                                accent(cx)
+                            } else {
+                                muted
+                            }),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.store.update(cx, |store, cx| {
+                                store.toggle_saved_message(
+                                    &chat_id,
+                                    target.entry,
+                                    target.text.clone(),
+                                    target.from_agent,
+                                    cx,
+                                )
+                            });
+                        })),
+                )
+            })
     }
 
     fn user_markdown(&mut self, index: usize, cx: &mut Context<Self>) -> Option<Entity<Markdown>> {
@@ -1366,6 +1485,11 @@ impl ChatView {
                 SharedString::from(format!("copy-user-{index}")),
                 CopySource::Text(text.clone()),
             )
+        });
+        let save = (self.subagent.is_none() && !text.trim().is_empty()).then(|| SaveTarget {
+            entry: index,
+            text: text.to_string(),
+            from_agent: false,
         });
         v_flex()
             .group(group.clone())
@@ -1473,7 +1597,7 @@ impl ChatView {
                         )
                     }),
             )
-            .child(self.hover_strip(group, *at, copy, editable, true, cx))
+            .child(self.hover_strip(group, *at, copy, save, editable, true, cx))
             .into_any_element()
     }
 
@@ -1773,6 +1897,14 @@ impl ChatView {
                 _ => None,
             })
             .unwrap_or_default();
+        let save = message_items
+            .first()
+            .filter(|_| self.subagent.is_none())
+            .map(|entry| SaveTarget {
+                entry: *entry,
+                text: CopySource::Messages(message_items.clone()).text(self, cx),
+                from_agent: true,
+            });
         let copy = (!message_items.is_empty()).then(|| {
             (
                 SharedString::from(format!("copy-turn-{turn_index}")),
@@ -1796,7 +1928,7 @@ impl ChatView {
             .w_full()
             .children(rows)
             .when(show_strip, |this| {
-                this.child(self.hover_strip(group, last_at, copy, false, false, cx))
+                this.child(self.hover_strip(group, last_at, copy, save, false, false, cx))
             })
             .when(is_working && is_last_turn, |this| {
                 this.child(self.render_working_trailer(cx))
@@ -2579,6 +2711,12 @@ fn icon(name: IconName, size: f32) -> Svg {
 enum CopySource {
     Text(SharedString),
     Messages(Vec<usize>),
+}
+
+struct SaveTarget {
+    entry: usize,
+    text: String,
+    from_agent: bool,
 }
 
 impl CopySource {
@@ -3778,6 +3916,79 @@ mod tests {
             })
         });
         assert_eq!(composer_text(&view, cx), "look at ");
+    }
+
+    #[gpui::test]
+    async fn saved_messages_are_found_even_after_the_chat_changes(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let project = project::Project::test(FakeFs::new(cx.executor()), [], cx).await;
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Claude, directory.path().to_path_buf(), cx)
+        });
+        crate::session::tests::feed_stopped_turn(
+            &session,
+            "first question",
+            1,
+            ToolCall::Glob {
+                pattern: "*.rs".into(),
+            },
+            cx,
+        );
+        crate::session::tests::feed_events(
+            &session,
+            vec![agent_harness::AgentEvent::TextDelta {
+                text: "First answer".into(),
+            }],
+            cx,
+        );
+        crate::session::tests::feed_stopped_turn(
+            &session,
+            "second question",
+            1,
+            ToolCall::Glob {
+                pattern: "*.md".into(),
+            },
+            cx,
+        );
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            ChatView::new(
+                session.clone(),
+                store.clone(),
+                project,
+                WeakEntity::new_invalid(),
+                window,
+                cx,
+            )
+        });
+        let reveal = |entry: usize, text: &str, cx: &mut VisualTestContext| {
+            view.update(cx, |view, cx| {
+                view.reveal_message(entry, text, cx)
+                    .then_some(view.revealed_turn)
+                    .flatten()
+            })
+        };
+        let answer = session.read_with(cx, |session, _| {
+            session
+                .entries()
+                .iter()
+                .position(|entry| matches!(entry, Entry::Assistant { .. }))
+        });
+        assert_eq!(
+            reveal(answer.expect("an answer"), "First answer", cx),
+            Some(0)
+        );
+        assert_eq!(
+            reveal(0, "second question", cx),
+            Some(1),
+            "a stale position falls back to the text"
+        );
+        assert_eq!(reveal(0, "never sent", cx), None);
     }
 
     #[gpui::test]
