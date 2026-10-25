@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+## 1.1.11 - 2026-10-26
+
 - You can now save important messages in agent chats for later.
 - Wu Dark has a new solid look with softer colors. Previous Wu Dark is now `Wu Dark Translucent`.
 - Typing `@` in an agent chat now shows more relevant file suggestions.
