@@ -1,8 +1,10 @@
-use super::{ChatView, DOWNLOADED_FEEDBACK, ui};
+use super::{
+    ChatView, DOWNLOADED_FEEDBACK, GENERATED_IMAGE_MAX_HEIGHT, GENERATED_IMAGE_MAX_WIDTH, ui,
+};
 use crate::chat_style::ink;
 use gpui::{
     AnyElement, Context, Image, ImageSource, IntoElement, MouseButton, ObjectFit, ParentElement,
-    ScrollWheelEvent, SharedString, Styled, Window, deferred, div, hsla, img, px, relative,
+    Pixels, ScrollWheelEvent, SharedString, Styled, Window, deferred, div, hsla, img, px, relative,
 };
 use std::{
     fs::{File, OpenOptions},
@@ -94,6 +96,24 @@ impl ChatView {
         });
         window.focus(&self.lightbox_focus, cx);
         cx.notify();
+    }
+
+    pub(super) fn generated_image_layout(&self, path: &Path) -> Option<(Pixels, f32)> {
+        *self
+            .generated_image_layouts
+            .borrow_mut()
+            .entry(path.to_path_buf())
+            .or_insert_with(|| {
+                let (width, height) = image::image_dimensions(path).log_err()?;
+                if width == 0 || height == 0 {
+                    return None;
+                }
+                let (width, height) = (width as f32, height as f32);
+                let scale = (GENERATED_IMAGE_MAX_WIDTH / width)
+                    .min(GENERATED_IMAGE_MAX_HEIGHT / height)
+                    .min(1.);
+                Some((px(width * scale), width / height))
+            })
     }
 
     pub(super) fn open_image_data(

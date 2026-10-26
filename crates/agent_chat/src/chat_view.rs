@@ -163,6 +163,7 @@ pub struct ChatView {
     composer_skills: Vec<agent_harness::SkillRef>,
     attachments: Vec<std::path::PathBuf>,
     lightbox: Option<image_viewer::Lightbox>,
+    generated_image_layouts: std::cell::RefCell<HashMap<std::path::PathBuf, Option<(Pixels, f32)>>>,
     diff_cache: std::cell::RefCell<HashMap<String, Arc<diff_view::FileDiffView>>>,
     diff_tasks: std::cell::RefCell<Vec<Task<()>>>,
     full_output: HashSet<String>,
@@ -338,6 +339,7 @@ impl ChatView {
             composer_skills: Vec::new(),
             attachments: Vec::new(),
             lightbox: None,
+            generated_image_layouts: Default::default(),
             diff_cache: Default::default(),
             diff_tasks: Default::default(),
             full_output: HashSet::default(),
@@ -1814,6 +1816,7 @@ impl ChatView {
                 }
                 Entry::Image { path } => {
                     let path = path.clone();
+                    let layout = self.generated_image_layout(&path);
                     let group = SharedString::from(format!("agent-generated-image-{index}"));
                     let download = {
                         let image = image_viewer::ChatImage::File(path.clone());
@@ -1859,6 +1862,9 @@ impl ChatView {
                             .relative()
                             .max_w(px(GENERATED_IMAGE_MAX_WIDTH))
                             .max_h(px(GENERATED_IMAGE_MAX_HEIGHT))
+                            .when_some(layout, |this, (width, aspect_ratio)| {
+                                this.w_full().max_w(width).aspect_ratio(aspect_ratio)
+                            })
                             .flex()
                             .items_center()
                             .justify_center()
@@ -1868,8 +1874,12 @@ impl ChatView {
                             .cursor_pointer()
                             .child(
                                 img(path.clone())
-                                    .max_w(px(GENERATED_IMAGE_MAX_WIDTH))
-                                    .max_h(px(GENERATED_IMAGE_MAX_HEIGHT))
+                                    .map(|image| match layout {
+                                        Some(_) => image.size_full(),
+                                        None => image
+                                            .max_w(px(GENERATED_IMAGE_MAX_WIDTH))
+                                            .max_h(px(GENERATED_IMAGE_MAX_HEIGHT)),
+                                    })
                                     .rounded(px(12.))
                                     .object_fit(ObjectFit::Contain),
                             )
@@ -3665,6 +3675,54 @@ mod tests {
             }
             assert!(lost.is_empty(), "pane lost focus ({name} focused) at steps {lost:?}");
         }
+    }
+
+    #[gpui::test]
+    async fn generated_images_reserve_their_height_before_they_load(cx: &mut TestAppContext) {
+        use agent_harness::AgentEvent;
+        cx.update(|cx| {
+            workspace::AppState::test(cx);
+            editor::init(cx);
+        });
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let picture = directory.path().join("picture.png");
+        image::RgbImage::new(1024, 768).save(&picture).expect("write png");
+        let store = new_store(directory.path(), cx);
+        store.update(cx, |store, _| store.skip_plan_usage());
+        let project = project::Project::test(FakeFs::new(cx.executor()), [], cx).await;
+        let session = store.update(cx, |store, cx| {
+            store.create_session(AgentKind::Codex, directory.path().to_path_buf(), cx)
+        });
+        let (multi_workspace, cx) = cx.add_window_view(|window, cx| {
+            workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+        });
+        let workspace = multi_workspace.read_with(cx, |multi, _| multi.workspace().clone());
+        let chat = workspace.update_in(cx, |workspace, window, cx| {
+            let weak = cx.entity().downgrade();
+            let chat = cx.new(|cx| {
+                ChatView::new(session.clone(), store.clone(), project.clone(), weak, window, cx)
+            });
+            workspace.add_item_to_active_pane(Box::new(chat.clone()), None, true, window, cx);
+            chat
+        });
+        cx.run_until_parked();
+        crate::session::tests::feed_events(
+            &session,
+            vec![AgentEvent::GeneratedImage {
+                id: "image".into(),
+                path: picture.to_string_lossy().into_owned(),
+                name: "picture.png".into(),
+                mime_type: "image/png".into(),
+            }],
+            cx,
+        );
+        cx.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+        let turn_height = chat.read_with(cx, |chat, _| {
+            chat.list.bounds_for_item(0).map(|bounds| bounds.size.height)
+        });
+        assert!(turn_height.is_some_and(|height| height >= px(384.)), "{turn_height:?}");
     }
 
     #[gpui::test]
