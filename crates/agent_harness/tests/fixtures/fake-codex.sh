@@ -50,6 +50,8 @@ if has "$line" '"method":"thread/resume"'; then
     read -r line || exit 1
     has "$line" '"method":"thread/start"' || exit 1
     emit "{\"id\":$(rid "$line"),\"result\":{\"thread\":{\"id\":\"th-fresh\"}}}"
+  elif has "$line" '"threadId":"drop-ok"'; then
+    emit "{\"id\":$(rid "$line"),\"result\":{\"thread\":{\"id\":\"th-resumed\",\"historyMode\":\"paginated\"}}}"
   else
     emit "{\"id\":$(rid "$line"),\"result\":{\"thread\":{\"id\":\"th-resumed\"}}}"
   fi

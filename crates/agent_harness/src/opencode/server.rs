@@ -592,7 +592,7 @@ impl Server {
                 self.post_json(
                     &format!("/api/session/{session_id}/revert/stage"),
                     directory,
-                    &json!({ "messageID": message_id }),
+                    &json!({ "messageID": message_id, "files": false }),
                 )
                 .await?;
                 self.post_json(

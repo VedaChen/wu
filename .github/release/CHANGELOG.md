@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+- Cancelled messages in older Codex chats no longer offer Edit.
+
 ## 1.1.11 - 2026-10-26
 
 - You can now save important messages in agent chats for later.

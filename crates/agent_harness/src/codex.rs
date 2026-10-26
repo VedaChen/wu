@@ -980,9 +980,11 @@ async fn run_session(session: Session) {
         let thread_id = thread["thread"]["id"].as_str().unwrap_or("").to_owned();
         let mut children = subagents::Subagents::new(thread_id.clone());
         children.restore(&thread["thread"]);
-        Ok::<_, HarnessError>((thread_id, children, drop_problem))
+        // Codex can only forget turns of threads that keep paginated history.
+        let revertable = thread["thread"]["historyMode"].as_str() == Some("paginated");
+        Ok::<_, HarnessError>((thread_id, children, drop_problem, revertable))
     };
-    let (thread_id, mut children, drop_problem) = tokio::select! {
+    let (thread_id, mut children, drop_problem, revertable) = tokio::select! {
         res = setup => match res {
             Ok(thread_id) => thread_id,
             Err(e) => {
@@ -1089,7 +1091,8 @@ async fn run_session(session: Session) {
     .await
     {
         Ok(id) => {
-            if !id.is_empty()
+            if revertable
+                && !id.is_empty()
                 && !send(&event_tx, AgentEvent::PromptRecorded { id: id.clone() }).await
             {
                 shutdown_child(&mut child, kill_grace).await;
@@ -1320,6 +1323,7 @@ async fn run_session(session: Session) {
                                 &event_tx,
                                 &mut assistant_message_id,
                                 &mut done_current,
+                                revertable,
                             )
                             .await
                             {
@@ -1452,7 +1456,7 @@ async fn run_session(session: Session) {
                                     current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
                                     if !steer_as_new_turn(
                                         &client, turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
-                                        &mut assistant_message_id, &mut done_current,
+                                        &mut assistant_message_id, &mut done_current, revertable,
                                     ).await { break 'main; }
                                 }
                             }
@@ -1461,7 +1465,7 @@ async fn run_session(session: Session) {
                         current_native = command_request(&msg.prompt, &thread_id).ok().flatten().is_some();
                         if !steer_as_new_turn(
                             &client, turn_params(permission, &msg.prompt, &msg.attachments, &msg.skills), &mut router, &event_tx,
-                            &mut assistant_message_id, &mut done_current,
+                            &mut assistant_message_id, &mut done_current, revertable,
                         ).await { break 'main; }
                     }
                 }
@@ -1552,10 +1556,12 @@ async fn steer_as_new_turn(
     event_tx: &mpsc::Sender<Result<AgentEvent, HarnessError>>,
     assistant_message_id: &mut String,
     done_current: &mut bool,
+    revertable: bool,
 ) -> bool {
     match start_turn(client, params).await {
         Ok(id) => {
-            if !id.is_empty()
+            if revertable
+                && !id.is_empty()
                 && !send(event_tx, AgentEvent::PromptRecorded { id: id.clone() }).await
             {
                 return false;

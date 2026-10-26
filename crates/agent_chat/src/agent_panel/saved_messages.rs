@@ -80,8 +80,7 @@ impl AgentPanel {
             .collect();
         let query = self.search.read(cx).text(cx).trim().to_lowercase();
         let mut messages: Vec<(SavedMessage, SessionSummary)> = store
-            .list_prefs()
-            .saved_messages
+            .saved_messages()
             .iter()
             .filter_map(|message| Some((message.clone(), chats.get(&message.chat_id)?.clone())))
             .filter(|(message, chat)| {

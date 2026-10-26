@@ -1369,10 +1369,11 @@ impl ChatView {
             )
             .when_some(save, |this, target| {
                 let chat_id = self.session.read(cx).metadata().id.clone();
-                let saved =
-                    self.store
-                        .read(cx)
-                        .is_message_saved(&chat_id, target.entry, &target.text);
+                let saved = self
+                    .store
+                    .read(cx)
+                    .saved_text(&chat_id, target.entry)
+                    .is_some_and(|saved| saved == target.source.text(self, cx));
                 this.child(
                     div()
                         .id(("save-message", target.entry))
@@ -1406,11 +1407,12 @@ impl ChatView {
                         )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
+                            let text = target.source.text(this, cx);
                             this.store.update(cx, |store, cx| {
                                 store.toggle_saved_message(
                                     &chat_id,
                                     target.entry,
-                                    target.text.clone(),
+                                    text,
                                     target.from_agent,
                                     cx,
                                 )
@@ -1488,7 +1490,7 @@ impl ChatView {
         });
         let save = (self.subagent.is_none() && !text.trim().is_empty()).then(|| SaveTarget {
             entry: index,
-            text: text.to_string(),
+            source: CopySource::Text(text.clone()),
             from_agent: false,
         });
         v_flex()
@@ -1902,7 +1904,7 @@ impl ChatView {
             .filter(|_| self.subagent.is_none())
             .map(|entry| SaveTarget {
                 entry: *entry,
-                text: CopySource::Messages(message_items.clone()).text(self, cx),
+                source: CopySource::Messages(message_items.clone()),
                 from_agent: true,
             });
         let copy = (!message_items.is_empty()).then(|| {
@@ -2715,7 +2717,7 @@ enum CopySource {
 
 struct SaveTarget {
     entry: usize,
-    text: String,
+    source: CopySource,
     from_agent: bool,
 }
 

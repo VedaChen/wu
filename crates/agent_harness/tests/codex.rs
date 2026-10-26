@@ -582,24 +582,25 @@ async fn resume_reuses_the_existing_thread() {
 
 #[tokio::test]
 async fn a_dropped_turn_is_reverted_before_the_next_prompt() {
-    for (thread, problem) in [("drop-ok", false), ("drop-fails", true)] {
+    for (thread, revertable) in [("drop-ok", true), ("drop-fails", false)] {
         let (controls, _steer, _token) = controls("Yes");
         let mut req = request("scenario:resumed");
         req.resume = Some(thread.into());
         req.drop_prompt = Some("t-typo".into());
         let events = run_to_end(&harness(), req, controls).await;
-        assert!(
+        assert_eq!(
             events
                 .iter()
                 .any(|e| matches!(e, AgentEvent::PromptRecorded { id } if id == "t-1")),
-            "the new turn reports its id: {events:?}"
+            revertable,
+            "only threads Codex can revert report their turn ids: {events:?}"
         );
         assert_eq!(
             events.iter().any(|e| matches!(
                 e,
                 AgentEvent::Error { message } if message.contains("couldn't forget your earlier message")
             )),
-            problem,
+            !revertable,
             "{thread}: {events:?}"
         );
         assert!(matches!(

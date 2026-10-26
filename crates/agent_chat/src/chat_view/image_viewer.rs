@@ -5,6 +5,8 @@ use gpui::{
     ScrollWheelEvent, SharedString, Styled, Window, deferred, div, hsla, img, px, relative,
 };
 use std::{
+    fs::{File, OpenOptions},
+    io::{ErrorKind, Write as _},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -35,11 +37,8 @@ fn downloads_dir() -> PathBuf {
     dirs::download_dir().unwrap_or_else(|| paths::home_dir().join("Downloads"))
 }
 
-fn unused_path(directory: &Path, file_name: &str) -> PathBuf {
-    let candidate = directory.join(file_name);
-    if !candidate.exists() {
-        return candidate;
-    }
+/// Claims the name on creation, so two downloads at once never share a file.
+fn create_unused(directory: &Path, file_name: &str) -> std::io::Result<(PathBuf, File)> {
     let name = Path::new(file_name);
     let stem = name
         .file_stem()
@@ -49,10 +48,16 @@ fn unused_path(directory: &Path, file_name: &str) -> PathBuf {
         .extension()
         .map(|extension| format!(".{}", extension.to_string_lossy()))
         .unwrap_or_default();
-    (2..)
-        .map(|number| directory.join(format!("{stem} ({number}){extension}")))
-        .find(|path| !path.exists())
-        .unwrap_or(candidate)
+    let candidates = std::iter::once(directory.join(file_name))
+        .chain((2..).map(|number| directory.join(format!("{stem} ({number}){extension}"))));
+    for path in candidates {
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(ErrorKind::AlreadyExists.into())
 }
 
 impl ChatImage {
@@ -128,11 +133,17 @@ impl ChatView {
         let workspace = self.workspace.clone();
         let saved = cx.background_spawn(async move {
             std::fs::create_dir_all(&directory)?;
-            let destination = unused_path(&directory, &file_name);
-            match image {
-                ChatImage::File(path) => std::fs::copy(path, &destination).map(|_| ()),
-                ChatImage::Data(image) => std::fs::write(&destination, &image.bytes),
+            let (destination, mut file) = create_unused(&directory, &file_name)?;
+            let written = match image {
+                ChatImage::File(path) => {
+                    File::open(path).and_then(|mut source| std::io::copy(&mut source, &mut file))
+                }
+                ChatImage::Data(image) => file.write_all(&image.bytes).map(|()| 0),
+            };
+            if written.is_err() {
+                std::fs::remove_file(&destination).log_err();
             }
+            written.map(|_| ())
         });
         cx.spawn_in(window, async move |this, cx| match saved.await {
             Ok(()) => this
@@ -346,17 +357,17 @@ mod tests {
             )
         });
         let image = ChatImage::File(source);
-        for _ in 0..2 {
-            view.update_in(cx, |view, window, cx| {
+        view.update_in(cx, |view, window, cx| {
+            for _ in 0..2 {
                 view.save_image_in(downloads.clone(), image.clone(), window, cx)
-            });
-            cx.run_until_parked();
-        }
-        run_until(cx, |_| downloads.join("generated (2).png").exists());
-        assert_eq!(
-            std::fs::read(downloads.join("generated.png")).expect("saved"),
-            b"png bytes"
-        );
+            }
+        });
+        let saved = |name: &str| std::fs::read(downloads.join(name)).ok();
+        run_until(cx, |_| {
+            saved("generated.png").as_deref() == Some(b"png bytes")
+                && saved("generated (2).png").as_deref() == Some(b"png bytes")
+        });
+        assert!(saved("generated (3).png").is_none());
         let shown = view.read_with(cx, |view, _| view.copied.clone());
         assert_eq!(shown, Some(image.download_key()));
     }

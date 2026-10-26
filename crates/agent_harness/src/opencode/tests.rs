@@ -2620,7 +2620,7 @@ async fn a_dropped_prompt_is_reverted_and_new_prompts_report_their_ids() {
             vec![
                 (
                     "/api/session/fixture/revert/stage".to_string(),
-                    json!({ "messageID": "msg_typo" }),
+                    json!({ "messageID": "msg_typo", "files": false }),
                 ),
                 (
                     "/api/session/fixture/revert/commit".to_string(),

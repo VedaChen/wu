@@ -2064,7 +2064,9 @@ pub struct ChatListPrefs {
     pub collapsed_sections: Vec<String>,
     pub favorite_models: Vec<String>,
     pub dictation_device: Option<String>,
-    pub saved_messages: Vec<SavedMessage>,
+    /// 1.1.11 kept saved messages here; they now live in their own file.
+    #[serde(rename = "saved_messages", skip_serializing)]
+    pub(crate) legacy_saved_messages: Vec<SavedMessage>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -2095,6 +2097,10 @@ pub enum StoreEvent {
 
 fn chat_list_path(directory: &Path) -> PathBuf {
     directory.join("chat_list.json")
+}
+
+fn saved_messages_path(directory: &Path) -> PathBuf {
+    directory.join("saved_messages.json")
 }
 
 fn fork_context(entries: &[SerializedEntry]) -> Option<String> {
@@ -2178,6 +2184,8 @@ pub struct AgentStore {
     accounts: HashMap<AgentKind, AccountsState>,
     list_prefs: ChatListPrefs,
     save_list_prefs_task: Task<()>,
+    saved_messages: Vec<SavedMessage>,
+    save_saved_messages_task: Task<()>,
     metadata_writes: HashMap<String, Task<()>>,
     save_defaults_task: Task<()>,
     load_task: Option<Shared<Task<()>>>,
@@ -2396,6 +2404,8 @@ impl AgentStore {
             accounts: HashMap::default(),
             list_prefs: ChatListPrefs::default(),
             save_list_prefs_task: Task::ready(()),
+            saved_messages: Vec::new(),
+            save_saved_messages_task: Task::ready(()),
             metadata_writes: HashMap::default(),
             save_defaults_task: Task::ready(()),
             load_task: None,
@@ -2416,7 +2426,8 @@ impl AgentStore {
             async move |this, cx| {
                 let defaults_file = defaults_path(&directory);
                 let list_file = chat_list_path(&directory);
-                let (sessions, defaults, list_prefs) = cx
+                let saved_file = saved_messages_path(&directory);
+                let (sessions, defaults, list_prefs, saved_messages) = cx
                     .background_spawn(async move {
                         let defaults = std::fs::read(&defaults_file).ok().and_then(|json| {
                             serde_json::from_slice::<HashMap<AgentKind, RunSettings>>(&json)
@@ -2425,7 +2436,15 @@ impl AgentStore {
                         let list_prefs = std::fs::read(&list_file).ok().and_then(|json| {
                             serde_json::from_slice::<ChatListPrefs>(&json).log_err()
                         });
-                        (load_all_metadata(&directory), defaults, list_prefs)
+                        let saved_messages = std::fs::read(&saved_file).ok().and_then(|json| {
+                            serde_json::from_slice::<Vec<SavedMessage>>(&json).log_err()
+                        });
+                        (
+                            load_all_metadata(&directory),
+                            defaults,
+                            list_prefs,
+                            saved_messages,
+                        )
                     })
                     .await;
                 let sessions = sessions.log_err().unwrap_or_default();
@@ -2433,8 +2452,16 @@ impl AgentStore {
                     if let Some(defaults) = defaults {
                         this.defaults = defaults;
                     }
-                    if let Some(list_prefs) = list_prefs {
+                    if let Some(mut list_prefs) = list_prefs {
+                        let legacy = std::mem::take(&mut list_prefs.legacy_saved_messages);
                         this.list_prefs = list_prefs;
+                        if saved_messages.is_none() && !legacy.is_empty() {
+                            this.update_saved_messages(|saved| *saved = legacy, cx);
+                            this.update_list_prefs(|_| {}, cx);
+                        }
+                    }
+                    if let Some(saved_messages) = saved_messages {
+                        this.saved_messages = saved_messages;
                     }
                     for metadata in sessions {
                         if !this.sessions.iter().any(|known| known.id == metadata.id) {
@@ -2980,11 +3007,34 @@ impl AgentStore {
         cx.notify();
     }
 
-    pub fn is_message_saved(&self, chat_id: &str, entry: usize, text: &str) -> bool {
-        self.list_prefs
-            .saved_messages
+    pub fn saved_messages(&self) -> &[SavedMessage] {
+        &self.saved_messages
+    }
+
+    pub fn saved_text(&self, chat_id: &str, entry: usize) -> Option<&str> {
+        self.saved_messages
             .iter()
-            .any(|saved| saved.chat_id == chat_id && saved.entry == entry && saved.text == text)
+            .find(|saved| saved.chat_id == chat_id && saved.entry == entry)
+            .map(|saved| saved.text.as_str())
+    }
+
+    fn update_saved_messages(
+        &mut self,
+        change: impl FnOnce(&mut Vec<SavedMessage>),
+        cx: &mut Context<Self>,
+    ) {
+        change(&mut self.saved_messages);
+        let saved = self.saved_messages.clone();
+        let path = saved_messages_path(&self.directory);
+        let previous_save = std::mem::replace(&mut self.save_saved_messages_task, Task::ready(()));
+        self.save_saved_messages_task = cx.background_spawn(async move {
+            previous_save.await;
+            serde_json::to_vec_pretty(&saved)
+                .map_err(anyhow::Error::from)
+                .and_then(|json| write_atomically(&path, &json))
+                .log_err();
+        });
+        cx.notify();
     }
 
     pub fn toggle_saved_message(
@@ -2995,14 +3045,13 @@ impl AgentStore {
         from_agent: bool,
         cx: &mut Context<Self>,
     ) {
-        let saved = self.is_message_saved(chat_id, entry, &text);
-        self.update_list_prefs(
-            |prefs| {
-                prefs
-                    .saved_messages
+        let saved = self.saved_text(chat_id, entry) == Some(text.as_str());
+        self.update_saved_messages(
+            |saved_messages| {
+                saved_messages
                     .retain(|message| !(message.chat_id == chat_id && message.entry == entry));
                 if !saved {
-                    prefs.saved_messages.push(SavedMessage {
+                    saved_messages.push(SavedMessage {
                         chat_id: chat_id.to_string(),
                         entry,
                         text,
@@ -3296,15 +3345,11 @@ impl AgentStore {
         pending_writes.extend(self.metadata_writes.remove(id));
         self.sessions.retain(|metadata| metadata.id != id);
         if self
-            .list_prefs
             .saved_messages
             .iter()
             .any(|message| message.chat_id == id)
         {
-            self.update_list_prefs(
-                |prefs| prefs.saved_messages.retain(|message| message.chat_id != id),
-                cx,
-            );
+            self.update_saved_messages(|saved| saved.retain(|message| message.chat_id != id), cx);
         }
         let id = id.to_string();
         let directory = self.directory.clone();
@@ -5164,8 +5209,7 @@ done
         let saved = |store: &Entity<AgentStore>, cx: &mut TestAppContext| {
             store.read_with(cx, |store, _| {
                 store
-                    .list_prefs()
-                    .saved_messages
+                    .saved_messages()
                     .iter()
                     .map(|message| (message.entry, message.text.clone()))
                     .collect::<Vec<_>>()
@@ -5182,6 +5226,32 @@ done
 
         reopened.update(cx, |store, cx| store.delete_session(&id, cx));
         assert!(saved(&reopened, cx).is_empty());
+    }
+
+    #[gpui::test]
+    async fn messages_saved_with_the_chat_list_move_to_their_own_file(cx: &mut TestAppContext) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let saved = serde_json::json!({
+            "chat_id": "a",
+            "entry": 2,
+            "text": "Fixed it.",
+            "from_agent": true,
+            "saved_at": 1,
+        });
+        std::fs::write(
+            chat_list_path(directory.path()),
+            serde_json::json!({ "compact_rows": true, "saved_messages": [saved] }).to_string(),
+        )
+        .expect("chat list");
+        let store = new_store(directory.path(), cx);
+        cx.run_until_parked();
+        store.read_with(cx, |store, _| {
+            assert!(store.list_prefs().compact_rows);
+            assert_eq!(store.saved_text("a", 2), Some("Fixed it."));
+        });
+        let file = |path: PathBuf| std::fs::read_to_string(path).expect("written");
+        assert!(file(saved_messages_path(directory.path())).contains("Fixed it."));
+        assert!(!file(chat_list_path(directory.path())).contains("Fixed it."));
     }
 
     #[test]
