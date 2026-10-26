@@ -86,7 +86,7 @@ function Chat({ time }: { time: number }) {
   const elapsed = Math.floor((time - SENT_AT) / 1000);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#0a0a0a73]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#181a21]">
       <div className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden">
         <div className="flex flex-col px-12 pt-[26px] pb-8">
           {sent && (
@@ -125,7 +125,7 @@ function Chat({ time }: { time: number }) {
               <span className="text-[12px]" style={{ color: muted }}>
                 Pondering…
               </span>
-              <span className="relative top-px text-[#a9a9ae80]">{elapsed}s</span>
+              <span className="relative top-px text-[#aaa8b780]">{elapsed}s</span>
             </div>
           )}
           {replied && (
@@ -138,7 +138,7 @@ function Chat({ time }: { time: number }) {
       </div>
 
       <div className="w-full px-4 pb-2">
-        <div className="flex h-[47px] items-center rounded-[22px] border border-[#ffffff1a] bg-[#29292c] pr-2 pl-2 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1)]">
+        <div className="flex h-[47px] items-center rounded-[22px] border border-[#2c2f3a] bg-[#2a2d37] pr-2 pl-2 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1)]">
           <span className="grid size-7 shrink-0 place-items-center">
             <Icon name="agent_paperclip" size={18} color={muted} />
           </span>
@@ -148,25 +148,25 @@ function Chat({ time }: { time: number }) {
               <span className="ml-px inline-block h-[17px] w-px translate-y-[3px]" style={{ background: text }} />
             )}
           </span>
-          <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] px-1.5 text-[12px] font-medium text-[#e8e8eae6]">
+          <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] px-1.5 text-[12px] font-medium text-[#f0eef4e6]">
             <Icon name="agent_claude" size={16} color={claude} />
             Opus 5.5
-            <span className="text-[#a9a9aeb3]">High</span>
+            <span className="text-[#aaa8b7b3]">High</span>
           </span>
           <span className="flex shrink-0 items-center gap-2 pl-0.5">
             <span className="grid size-7 place-items-center">
               <Icon name="agent_microphone" size={18} color={muted} />
             </span>
-            <span className={`grid size-7 place-items-center rounded-full bg-[#e8e8ea] ${draft || working ? '' : 'opacity-35'}`}>
+            <span className={`grid size-7 place-items-center rounded-full bg-[#f0eef4] ${draft || working ? '' : 'opacity-35'}`}>
               {working ? (
-                <span className="size-[11px] rounded-[3px] bg-[#0d0d0d]" />
+                <span className="size-[11px] rounded-[3px] bg-[#181a21]" />
               ) : (
-                <Icon name="agent_send" size={14} color="#0d0d0d" />
+                <Icon name="agent_send" size={14} color="#181a21" />
               )}
             </span>
           </span>
         </div>
-        <div className="flex h-6 items-center pt-2 text-[12px] font-medium text-[#a9a9ae99]">
+        <div className="flex h-6 items-center pt-2 text-[12px] font-medium text-[#aaa8b799]">
           <span className="flex items-center gap-1 pl-2.5">
             <span className="flex h-5 items-center gap-1.5 px-2">
               <Icon name="agent_folder" size={12} />
@@ -195,11 +195,11 @@ export function AgentWindow() {
     <div ref={frameRef} className={`${mediaFrame} grid card-raised aspect-[16/10] place-items-center`} aria-hidden="true" inert>
       <div className="@container w-[88%] overflow-hidden rounded-[10px] shadow-[0_24px_60px_rgba(0,0,0,0.4),inset_0_0_0_1px_rgba(255,255,255,0.12)]" style={{ aspectRatio: `${WIDTH} / ${HEIGHT}` }}>
         <div
-          className="flex origin-top-left flex-col bg-[#0d0d0dcc] font-wu text-[14px] tracking-normal select-none"
+          className="flex origin-top-left flex-col bg-[#181a21] font-wu text-[14px] tracking-normal select-none"
           style={{ width: WIDTH, height: HEIGHT, color: text, scale: `tan(atan2(100cqw, ${WIDTH}px))` }}
         >
-          <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[#ffffff1a] px-2">
-            <div className="flex h-6 max-w-[320px] items-center gap-[3px] rounded-[6px] bg-[#ebebeb1a] px-1 text-[14px]">
+          <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[#2c2f3a] px-2">
+            <div className="flex h-6 max-w-[320px] items-center gap-[3px] rounded-[6px] bg-[#22252e] px-1 text-[14px]">
               <span className="grid size-[18px] place-items-center">
                 <Icon name="agent_claude" size={14} color={claude} />
               </span>

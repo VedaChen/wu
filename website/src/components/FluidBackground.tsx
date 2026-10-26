@@ -14,7 +14,7 @@ const CYCLE_PER_SECOND = 0.06;
 const IDLE_AFTER_MS = 10_000;
 const AUTO_PATH_SPEED = 0.65;
 const MAX_PIXEL_RATIO = 1.5;
-const COLORS = ['#2216f7', '#55bdff', '#a702ff'];
+const COLORS = ['#1f4bff', '#55bdff', '#16c6e8'];
 
 const vertexSource = `#version 300 es
 in vec2 position;
