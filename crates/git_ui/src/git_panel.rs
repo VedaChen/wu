@@ -373,7 +373,7 @@ fn git_panel_view_options_menu(
 
         context_menu
             .context(focus_handle.clone())
-            .header("View")
+            .header(i18n::tr("View"))
             .item({
                 let view_options_menu_state = view_options_menu_state.clone();
                 ContextMenuEntry::new("List")
@@ -404,7 +404,7 @@ fn git_panel_view_options_menu(
             })
             .when(!state.tree_view, |this| {
                 this.separator()
-                    .header("Sort By")
+                    .header(i18n::tr("Sort By"))
                     .item({
                         let view_options_menu_state = view_options_menu_state.clone();
                         ContextMenuEntry::new("Path")
@@ -435,7 +435,7 @@ fn git_panel_view_options_menu(
                     })
             })
             .separator()
-            .header("Group By")
+            .header(i18n::tr("Group By"))
             .item({
                 let view_options_menu_state = view_options_menu_state.clone();
                 ContextMenuEntry::new("None")
@@ -5508,7 +5508,7 @@ impl GitPanel {
             .trigger_with_tooltip(
                 IconButton::new("view-options-menu-trigger", IconName::Filter)
                     .icon_size(IconSize::Small),
-                Tooltip::text("View Options"),
+                Tooltip::text(i18n::tr("View Options")),
             )
             .menu(move |window, cx| {
                 Some(git_panel_view_options_menu(
@@ -5591,8 +5591,7 @@ impl GitPanel {
                                 el.context(keybinding_target)
                             })
                             .when(has_previous_commit, |this| {
-                                this.toggleable_entry(
-                                    "Amend",
+                                this.toggleable_entry(i18n::tr("Amend"),
                                     amend,
                                     IconPosition::Start,
                                     Some(Box::new(Amend)),
@@ -5608,8 +5607,7 @@ impl GitPanel {
                                     },
                                 )
                             })
-                            .toggleable_entry(
-                                "Signoff",
+                            .toggleable_entry(i18n::tr("Signoff"),
                                 signoff,
                                 IconPosition::Start,
                                 Some(Box::new(Signoff)),
@@ -5623,7 +5621,7 @@ impl GitPanel {
                                         window.dispatch_action(Box::new(SkipHooks), cx)
                                     })
                                     .documentation_aside(DocumentationSide::Left, |_| {
-                                        Label::new("git commit --no-verify").into_any_element()
+                                        Label::new(i18n::tr("git commit --no-verify")).into_any_element()
                                     }),
                             )
                     }))
@@ -5820,7 +5818,7 @@ impl GitPanel {
                                         .color(Color::Muted),
                                 )
                                 .child(
-                                    Label::new("View Diff")
+                                    Label::new(i18n::tr("View Diff"))
                                         .size(LabelSize::Small)
                                         .color(Color::Muted),
                                 )
@@ -6147,13 +6145,13 @@ impl GitPanel {
                     .overflow_hidden()
                     .max_w(relative(0.85))
                     .child(
-                        Label::new("This will update your most recent commit.")
+                        Label::new(i18n::tr("This will update your most recent commit."))
                             .size(LabelSize::Small)
                             .truncate(),
                     ),
             )
             .child(
-                Button::new("cancel", "Cancel")
+                Button::new("cancel", i18n::tr("Cancel"))
                     .label_size(LabelSize::Small)
                     .layer(ElevationIndex::ModalSurface)
                     .on_click(cx.listener(|this, _, _, cx| this.set_amend_pending(false, cx))),
@@ -6721,7 +6719,7 @@ impl GitPanel {
                                     let sha_for_click = sha_string;
 
                                     let dot_separator = || {
-                                        Label::new("•")
+                                        Label::new(i18n::tr("•"))
                                             .size(LabelSize::Small)
                                             .color(Color::Muted)
                                             .alpha(0.5)
@@ -6948,10 +6946,10 @@ impl GitPanel {
         v_flex()
             .gap_1()
             .items_center()
-            .child(Label::new("No changes to commit").color(Color::Muted))
+            .child(Label::new(i18n::tr("No changes to commit")).color(Color::Muted))
             .when(show_branch_diff, |this| {
                 this.child(
-                    Button::new("view_branch_diff", "View Branch Diff")
+                    Button::new("view_branch_diff", i18n::tr("View Branch Diff"))
                         .label_size(LabelSize::Small)
                         .style(ButtonStyle::Outlined)
                         .on_click(move |_, _, cx| {
@@ -6989,7 +6987,7 @@ impl GitPanel {
                         .flex_wrap()
                         .gap_1()
                         .child(
-                            Button::new("trust_directory", "Trust Directory")
+                            Button::new("trust_directory", i18n::tr("Trust Directory"))
                             .label_size(LabelSize::Small)
                             .layer(ElevationIndex::ModalSurface)
                             .style(ButtonStyle::Filled)
@@ -7003,7 +7001,7 @@ impl GitPanel {
                             )
                     )
                     .child(
-                        Button::new("learn_more", "Learn More")
+                        Button::new("learn_more", i18n::tr("Learn More"))
                             .label_size(LabelSize::Small)
                             .style(ButtonStyle::Outlined)
                             .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::Small).color(Color::Muted))
@@ -7019,9 +7017,9 @@ impl GitPanel {
             v_flex()
                 .gap_1()
                 .items_center()
-                .child(Label::new("No Git Repositories").color(Color::Muted))
+                .child(Label::new(i18n::tr("No Git Repositories")).color(Color::Muted))
                 .child(
-                    Button::new("initialize_repository", "Initialize Repository")
+                    Button::new("initialize_repository", i18n::tr("Initialize Repository"))
                         .label_size(LabelSize::Small)
                         .style(ButtonStyle::Outlined)
                         .tooltip(Tooltip::for_action_title_in(
@@ -8742,7 +8740,7 @@ impl RenderOnce for PanelRepoFooter {
                         this.child(div().child(repo_selector).min_w_0()).when(
                             show_separator,
                             |this| {
-                                this.child(Label::new("/").size(LabelSize::Small).color(
+                                this.child(Label::new(i18n::tr("/")).size(LabelSize::Small).color(
                                     Color::Custom(cx.theme().colors().text_muted.opacity(0.4)),
                                 ))
                             },

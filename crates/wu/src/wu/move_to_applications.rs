@@ -181,7 +181,7 @@ impl Render for InstallingZedModal {
                     .py_3()
                     .border_b_1()
                     .border_color(theme.colors().border_variant)
-                    .child(Label::new("Installing Wu…")),
+                    .child(Label::new(i18n::tr("Installing Wu…"))),
             )
             .child(
                 h_flex()
@@ -199,9 +199,9 @@ impl Render for InstallingZedModal {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Label::new("Moving Wu to Applications"))
+                            .child(Label::new(i18n::tr("Moving Wu to Applications")))
                             .child(
-                                Label::new("Wu will reopen when installation is complete.")
+                                Label::new(i18n::tr("Wu will reopen when installation is complete."))
                                     .size(LabelSize::Small)
                                     .color(Color::Muted),
                             ),

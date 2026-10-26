@@ -283,19 +283,21 @@ impl Render for Onboarding {
                                             .child(
                                                 v_flex()
                                                     .child(
-                                                        Headline::new("Welcome to Wu")
+                                                        Headline::new(i18n::tr("Welcome to Wu"))
                                                             .size(HeadlineSize::Small),
                                                     )
                                                     .child(
-                                                        Label::new("The editor that doesn't get in your way")
-                                                            .color(Color::Muted)
-                                                            .size(LabelSize::Small)
-                                                            .italic(),
+                                                        Label::new(i18n::tr(
+                                                            "The editor that doesn't get in your way",
+                                                        ))
+                                                        .color(Color::Muted)
+                                                        .size(LabelSize::Small)
+                                                        .italic(),
                                                     ),
                                             ),
                                     )
                                     .child({
-                                        Button::new("finish_setup", "Finish Setup")
+                                        Button::new("finish_setup", i18n::tr("Finish Setup"))
                                             .style(ButtonStyle::Filled)
                                             .size(ButtonSize::Medium)
                                             .width(rems_from_px(200_f32))
@@ -329,7 +331,7 @@ impl Item for Onboarding {
     type Event = ItemEvent;
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Onboarding".into()
+        i18n::tr("Onboarding")
     }
 
     fn show_toolbar(&self) -> bool {
@@ -409,27 +411,37 @@ pub async fn handle_import_vscode_settings(
             Ok(vscode_settings) => vscode_settings,
             Err(err) => {
                 zlog::error!("{err:?}");
+                let source_name = source.to_string();
+                let ok = i18n::tr("OK");
+                let message = i18n::tr_format(
+                    "Could not find or load a {source} settings file",
+                    &[("source", source_name.as_str())],
+                );
                 let _ = cx.prompt(
                     gpui::PromptLevel::Info,
-                    &format!("Could not find or load a {source} settings file"),
+                    &message,
                     None,
-                    &["OK"],
+                    &[ok.as_ref()],
                 );
                 return;
             }
         };
 
     if !skip_prompt {
+        let source_name = vscode_settings.source.to_string();
+        let path = truncate_and_remove_front(&vscode_settings.path.to_string_lossy(), 128);
+        let message = i18n::tr_format(
+            "Importing {source} settings may overwrite your existing settings. \
+            Will import settings from {path}",
+            &[("source", source_name.as_str()), ("path", path.as_str())],
+        );
+        let import = i18n::tr("Import");
+        let cancel = i18n::tr("Cancel");
         let prompt = cx.prompt(
             gpui::PromptLevel::Warning,
-            &format!(
-                "Importing {} settings may overwrite your existing settings. \
-                Will import settings from {}",
-                vscode_settings.source,
-                truncate_and_remove_front(&vscode_settings.path.to_string_lossy(), 128),
-            ),
+            &message,
             None,
-            &["Import", "Cancel"],
+            &[import.as_ref(), cancel.as_ref()],
         );
         let result = cx.spawn(async move |_| prompt.await.ok()).await;
         if result != Some(0) {
@@ -453,8 +465,13 @@ pub async fn handle_import_vscode_settings(
     workspace
         .update_in(cx, |workspace, _, cx| match result {
             Ok(_) => {
+                let source_name = source.to_string();
+                let confirmation_message = i18n::tr_format(
+                    "Your {source} settings were successfully imported.",
+                    &[("source", source_name.as_str())],
+                );
                 let confirmation_toast = StatusToast::new(
-                    format!("Your {} settings were successfully imported.", source),
+                    confirmation_message,
                     cx,
                     |this, _| {
                         this.icon(
@@ -477,7 +494,7 @@ pub async fn handle_import_vscode_settings(
             }
             Err(_) => {
                 let error_toast = StatusToast::new(
-                    "Failed to import settings. See log for details",
+                    i18n::tr("Failed to import settings. See log for details"),
                     cx,
                     |this, _| {
                         this.icon(
@@ -485,7 +502,7 @@ pub async fn handle_import_vscode_settings(
                                 .size(IconSize::Small)
                                 .color(Color::Error),
                         )
-                        .action("Open Log", |window, cx| {
+                        .action(i18n::tr("Open Log"), |window, cx| {
                             window.dispatch_action(workspace::OpenLog.boxed_clone(), cx)
                         })
                         .dismiss_button(true)

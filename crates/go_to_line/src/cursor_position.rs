@@ -185,12 +185,12 @@ impl CursorPosition {
                 write!(text, ", ").unwrap();
             }
             let name = if is_short_format { &name[..1] } else { name };
-            let plural_suffix = if count > 1 && !is_short_format {
-                "s"
+            if count > 1 && !is_short_format {
+                let plural_suffix = i18n::tr_ctx("cursor-position-plural", "s");
+                write!(text, "{count} {}{plural_suffix}", i18n::tr(name)).unwrap();
             } else {
-                ""
-            };
-            write!(text, "{count} {name}{plural_suffix}").unwrap();
+                write!(text, "{count} {}", i18n::tr(name)).unwrap();
+            }
             wrote_once = true;
         }
         text.push(')');
@@ -226,9 +226,12 @@ impl Render for CursorPosition {
                 Button::new("go-to-line-column", text)
                     .label_size(LabelSize::Small)
                     .tab_index(0isize)
-                    .aria_label(format!(
-                        "Line {}, column {}",
-                        position.line, position.character
+                    .aria_label(i18n::tr_format(
+                        "Line {line}, column {column}",
+                        &[
+                            ("line", &position.line.to_string()),
+                            ("column", &position.character.to_string()),
+                        ],
                     ))
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(workspace) = this.workspace.upgrade() {
@@ -247,13 +250,13 @@ impl Render for CursorPosition {
                     }))
                     .tooltip(move |_window, cx| match context.as_ref() {
                         Some(context) => Tooltip::for_action_in(
-                            "Go to Line/Column",
+                            i18n::tr("Go to Line/Column"),
                             &editor::actions::ToggleGoToLine,
                             context,
                             cx,
                         ),
                         None => Tooltip::for_action(
-                            "Go to Line/Column",
+                            i18n::tr("Go to Line/Column"),
                             &editor::actions::ToggleGoToLine,
                             cx,
                         ),

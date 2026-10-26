@@ -6597,7 +6597,7 @@ pub fn render_breadcrumb_text(
     });
 
     let breadcrumbs = Itertools::intersperse_with(highlighted_segments, || {
-        Label::new("›").color(Color::Placeholder).into_any_element()
+        Label::new(i18n::tr("›")).color(Color::Placeholder).into_any_element()
     });
 
     let breadcrumbs_stack = h_flex()
@@ -6641,7 +6641,7 @@ pub fn render_breadcrumb_text(
                                     h_flex()
                                         .gap_1()
                                         .justify_between()
-                                        .child(Label::new("Show Symbol Outline"))
+                                        .child(Label::new(i18n::tr("Show Symbol Outline")))
                                         .child(ui::KeyBinding::for_action_in(
                                             &wu_actions::outline::ToggleOutline,
                                             &focus_handle,
@@ -6656,7 +6656,7 @@ pub fn render_breadcrumb_text(
                                             .pt_1()
                                             .border_t_1()
                                             .border_color(cx.theme().colors().border_variant)
-                                            .child(Label::new("Right-Click to Copy Path")),
+                                            .child(Label::new(i18n::tr("Right-Click to Copy Path"))),
                                     )
                                 })
                                 .into_any_element()

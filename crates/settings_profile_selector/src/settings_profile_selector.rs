@@ -155,7 +155,7 @@ impl PickerDelegate for SettingsProfileSelectorDelegate {
     }
 
     fn placeholder_text(&self, _: &mut Window, _: &mut App) -> std::sync::Arc<str> {
-        "Select a settings profile...".into()
+        std::sync::Arc::from(i18n::tr("Select a settings profile...").as_ref())
     }
 
     fn match_count(&self) -> usize {
@@ -264,16 +264,20 @@ impl PickerDelegate for SettingsProfileSelectorDelegate {
     ) -> Option<Self::ListItem> {
         let mat = &self.matches.get(ix)?;
         let profile_name = &self.profile_names.get(mat.candidate_id)?;
+        let display_name = display_name(profile_name);
+        let translated_name = i18n::tr(&display_name);
+        let positions = if translated_name.as_ref() == display_name.as_str() {
+            mat.positions.clone()
+        } else {
+            Vec::new()
+        };
 
         Some(
             ListItem::new(ix)
                 .inset(true)
                 .spacing(ListItemSpacing::Sparse)
                 .toggle_state(selected)
-                .child(HighlightedLabel::new(
-                    display_name(profile_name),
-                    mat.positions.clone(),
-                )),
+                .child(HighlightedLabel::new(translated_name, positions)),
         )
     }
 }

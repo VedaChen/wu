@@ -210,7 +210,7 @@ impl RenderOnce for UpdateButton {
                         IconButton::new(dismiss_button_id, IconName::Close)
                             .icon_size(IconSize::Indicator)
                             .when_some(self.on_dismiss, |this, handler| this.on_click(handler))
-                            .tooltip(Tooltip::text("Dismiss")),
+                            .tooltip(Tooltip::text(i18n::tr("Dismiss"))),
                     ),
                 )
             })
@@ -289,7 +289,7 @@ mod tests {
     impl Render for TestTooltip {
         fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
             self.rendered.set(self.rendered.get() + 1);
-            div().child("tooltip")
+            div().child(i18n::tr("tooltip"))
         }
     }
 

@@ -969,7 +969,7 @@ impl ChatView {
                         .group_hover(TABLE_GROUP, |style| style.visible())
                 })
                 .hover(|style| style.bg(ink(0.08, cx)))
-                .tooltip(Tooltip::text("Copy table as Markdown"))
+                .tooltip(Tooltip::text(i18n::tr("Copy table as Markdown")))
                 .child(
                     icon(
                         if is_copied {
@@ -981,7 +981,7 @@ impl ChatView {
                     )
                     .text_color(muted),
                 )
-                .when(is_copied, |this| this.child("Copied"))
+                .when(is_copied, |this| this.child(i18n::tr("Copied")))
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
                     let key = key.clone();
@@ -1147,7 +1147,7 @@ impl ChatView {
                                             .text_size(px(10.5))
                                             .text_color(muted)
                                             .hover(|style| style.bg(ink(0.08, cx)))
-                                            .tooltip(Tooltip::text("Copy code"))
+                                            .tooltip(Tooltip::text(i18n::tr("Copy code")))
                                             .child(
                                                 icon(
                                                     if is_copied {
@@ -1159,7 +1159,7 @@ impl ChatView {
                                                 )
                                                 .text_color(muted),
                                             )
-                                            .when(is_copied, |this| this.child("Copied"))
+                                            .when(is_copied, |this| this.child(i18n::tr("Copied")))
                                             .on_click(move |_, _, cx| {
                                                 cx.stop_propagation();
                                                 let key = key.clone();
@@ -1329,7 +1329,7 @@ impl ChatView {
                                 .rounded(px(6.))
                                 .cursor_pointer()
                                 .hover(|style| style.bg(ink(0.08, cx)))
-                                .tooltip(Tooltip::text("Edit message"))
+                                .tooltip(Tooltip::text(i18n::tr("Edit message")))
                                 .child(icon(IconName::AgentPen, 14.).text_color(muted))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     cx.stop_propagation();
@@ -1349,7 +1349,7 @@ impl ChatView {
                                 .rounded(px(6.))
                                 .cursor_pointer()
                                 .hover(|style| style.bg(ink(0.08, cx)))
-                                .tooltip(Tooltip::text("Copy message"))
+                                .tooltip(Tooltip::text(i18n::tr("Copy message")))
                                 .child(
                                     icon(
                                         if is_copied {
@@ -1559,7 +1559,7 @@ impl ChatView {
                                     .overflow_hidden()
                                     .children(user_text),
                             )
-                            .child(div().h(ui(USER_LINE_HEIGHT)).child("..."))
+                            .child(div().h(ui(USER_LINE_HEIGHT)).child(i18n::tr("...")))
                         } else {
                             this.children(user_text)
                         }
@@ -1613,7 +1613,7 @@ impl ChatView {
             .text_size(ui(12.))
             .text_color(cx.theme().status().error)
             .cursor_pointer()
-            .child("Not delivered. Click to retry.")
+            .child(i18n::tr("Not delivered. Click to retry."))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.session
                     .update(cx, |session, cx| session.retry_undelivered(index, cx))
@@ -2024,7 +2024,7 @@ impl ChatView {
                                 div()
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(danger_muted)
-                                    .child("Error"),
+                                    .child(i18n::tr("Error")),
                             )
                             .child(div().flex_1())
                             .child(
@@ -2038,7 +2038,7 @@ impl ChatView {
                                     .rounded(px(6.))
                                     .cursor_pointer()
                                     .hover(|style| style.bg(danger.opacity(0.12)))
-                                    .tooltip(Tooltip::text("Copy message"))
+                                    .tooltip(Tooltip::text(i18n::tr("Copy message")))
                                     .child(
                                         icon(
                                             if is_copied {
@@ -2405,7 +2405,7 @@ impl ChatView {
                     .bg(ink(0.03, cx))
                     .cursor_pointer()
                     .hover(|style| style.bg(ink(0.05, cx)))
-                    .tooltip(Tooltip::text("Open subagent"))
+                    .tooltip(Tooltip::text(i18n::tr("Open subagent")))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.open_subagent(id.clone(), &call, window, cx)
                     }))

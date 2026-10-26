@@ -1027,7 +1027,9 @@ impl Dock {
     ) -> (Box<dyn Action>, SharedString, bool) {
         let is_active = Some(panel_index) == self.active_panel_index && self.is_open;
         if is_active {
-            let tooltip: SharedString = format!("Close {} Dock", self.position.label()).into();
+            let position = i18n::tr(self.position.label());
+            let tooltip: SharedString =
+                i18n::tr_format("Close {position} Dock", &[("position", &position)]).into();
             (self.toggle_action(), tooltip, true)
         } else {
             let action = self

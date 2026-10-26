@@ -333,8 +333,7 @@ impl ChatView {
                 let devices = dictation::input_devices().log_err().unwrap_or_default();
                 let chosen = store.read(cx).list_prefs().dictation_device.clone();
                 ContextMenu::build(window, cx, move |menu, _, _| {
-                    let mut menu = menu.header("Microphone").toggleable_entry(
-                        "System Default",
+                    let mut menu = menu.header(i18n::tr("Microphone")).toggleable_entry(i18n::tr("System Default"),
                         chosen.is_none(),
                         ui::IconPosition::Start,
                         None,
@@ -520,7 +519,7 @@ impl ChatView {
                             .text_color(colors.text_muted)
                             .cursor_pointer()
                             .hover(move |style| style.bg(hover).text_color(colors.text))
-                            .child("Dismiss")
+                            .child(i18n::tr("Dismiss"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.dictation = DictationState::Idle;
                                 cx.notify();

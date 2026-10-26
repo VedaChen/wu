@@ -47,7 +47,10 @@ fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement
     return v_flex()
         .gap_2()
         .child(
-            h_flex().justify_between().child(Label::new("Theme")).child(
+            h_flex()
+                .justify_between()
+                .child(Label::new(i18n::tr("Theme")))
+                .child(
                 ToggleButtonGroup::single_row(
                     "theme-selector-onboarding-dark-light",
                     [
@@ -56,17 +59,14 @@ fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement
                         ThemeAppearanceMode::System,
                     ]
                     .map(|mode| {
-                        const MODE_NAMES: [SharedString; 3] = [
-                            SharedString::new_static("Light"),
-                            SharedString::new_static("Dark"),
-                            SharedString::new_static("System"),
-                        ];
-                        ToggleButtonSimple::new(
-                            MODE_NAMES[mode as usize].clone(),
-                            move |_, _, cx| {
-                                write_mode_change(mode, cx);
-                            },
-                        )
+                        let mode_name = match mode {
+                            ThemeAppearanceMode::Light => i18n::tr("Light"),
+                            ThemeAppearanceMode::Dark => i18n::tr("Dark"),
+                            ThemeAppearanceMode::System => i18n::tr("System"),
+                        };
+                        ToggleButtonSimple::new(mode_name, move |_, _, cx| {
+                            write_mode_change(mode, cx);
+                        })
                     }),
                 )
                 .size(ToggleButtonGroupSize::Medium)
@@ -232,7 +232,10 @@ fn render_base_keymap_section(tab_index: &mut isize, cx: &mut App) -> impl IntoE
         BaseKeymap::None => None,
     };
 
-    return v_flex().gap_2().child(Label::new("Base Keymap")).child(
+    return v_flex()
+        .gap_2()
+        .child(Label::new(i18n::tr("Base Keymap")))
+        .child(
         ToggleButtonGroup::two_rows(
             "base_keymap_selection",
             [
@@ -289,12 +292,18 @@ fn render_worktree_auto_trust_switch(tab_index: &mut isize, cx: &mut App) -> imp
         ui::ToggleState::Unselected
     };
 
-    let tooltip_description = "Wu can only allow services like language servers, project settings, and MCP servers to run after you mark a new project as trusted.";
+    let tooltip_description = i18n::tr(
+        "Wu can only allow services like language servers, project settings, and MCP servers to run after you mark a new project as trusted.",
+    );
 
     SwitchField::new(
         "onboarding-auto-trust-worktrees",
-        Some("Trust All Projects By Default"),
-        Some("Automatically mark all new projects as trusted to unlock all Wu's features".into()),
+        Some(i18n::tr("Trust All Projects By Default")),
+        Some(
+            i18n::tr(
+                "Automatically mark all new projects as trusted to unlock all Wu's features",
+            ),
+        ),
         toggle_state,
         {
             let fs = <dyn Fs>::global(cx);
@@ -371,10 +380,12 @@ fn render_import_settings_section(tab_index: &mut isize, cx: &mut App) -> impl I
             v_flex()
                 .gap_0p5()
                 .max_w_5_6()
-                .child(Label::new("Import Settings"))
+                .child(Label::new(i18n::tr("Import Settings")))
                 .child(
-                    Label::new("Automatically pull your settings from other editors")
-                        .color(Color::Muted),
+                    Label::new(i18n::tr(
+                        "Automatically pull your settings from other editors",
+                    ))
+                    .color(Color::Muted),
                 ),
         )
         .child(h_flex().gap_1().child(vscode).child(cursor))
@@ -392,14 +403,16 @@ fn render_install_cli_section(tab_index: &mut isize) -> impl IntoElement {
             v_flex()
                 .gap_0p5()
                 .max_w_5_6()
-                .child(Label::new("Terminal Command"))
+                .child(Label::new(i18n::tr("Terminal Command")))
                 .child(
-                    Label::new("Open files and folders from the terminal with the wu command")
-                        .color(Color::Muted),
+                    Label::new(i18n::tr(
+                        "Open files and folders from the terminal with the wu command",
+                    ))
+                    .color(Color::Muted),
                 ),
         )
         .child(
-            Button::new("install-cli", "Install CLI")
+            Button::new("install-cli", i18n::tr("Install CLI"))
                 .style(ButtonStyle::OutlinedGhost)
                 .size(ButtonSize::Medium)
                 .label_size(LabelSize::Small)

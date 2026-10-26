@@ -15,7 +15,7 @@ use gpui::{HighlightStyle, StyleRefinement, StyledText};
 /// ```
 /// use ui::prelude::*;
 ///
-/// Label::new("Hello, World!");
+/// Label::new(i18n::tr("Hello, World!"));
 /// ```
 ///
 /// **A colored label**, for example labeling a dangerous action:
@@ -23,7 +23,7 @@ use gpui::{HighlightStyle, StyleRefinement, StyledText};
 /// ```
 /// use ui::prelude::*;
 ///
-/// let my_label = Label::new("Delete").color(Color::Error);
+/// let my_label = Label::new(i18n::tr("Delete")).color(Color::Error);
 /// ```
 ///
 /// **A label with a strikethrough**, for example labeling something that has been deleted:
@@ -31,7 +31,7 @@ use gpui::{HighlightStyle, StyleRefinement, StyledText};
 /// ```
 /// use ui::prelude::*;
 ///
-/// let my_label = Label::new("Deleted").strikethrough();
+/// let my_label = Label::new(i18n::tr("Deleted")).strikethrough();
 /// ```
 #[derive(IntoElement, RegisterComponent)]
 pub struct Label {
@@ -48,7 +48,7 @@ impl Label {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!");
+    /// let my_label = Label::new(i18n::tr("Hello, World!"));
     /// ```
     pub fn new(label: impl Into<SharedString>) -> Self {
         Self {
@@ -137,7 +137,7 @@ impl LabelCommon for Label {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!").size(LabelSize::Small);
+    /// let my_label = Label::new(i18n::tr("Hello, World!")).size(LabelSize::Small);
     /// ```
     fn size(mut self, size: LabelSize) -> Self {
         self.base = self.base.size(size);
@@ -152,7 +152,7 @@ impl LabelCommon for Label {
     /// use gpui::FontWeight;
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!").weight(FontWeight::BOLD);
+    /// let my_label = Label::new(i18n::tr("Hello, World!")).weight(FontWeight::BOLD);
     /// ```
     fn weight(mut self, weight: gpui::FontWeight) -> Self {
         self.base = self.base.weight(weight);
@@ -166,7 +166,7 @@ impl LabelCommon for Label {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!").line_height_style(LineHeightStyle::UiLabel);
+    /// let my_label = Label::new(i18n::tr("Hello, World!")).line_height_style(LineHeightStyle::UiLabel);
     /// ```
     fn line_height_style(mut self, line_height_style: LineHeightStyle) -> Self {
         self.base = self.base.line_height_style(line_height_style);
@@ -180,7 +180,7 @@ impl LabelCommon for Label {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!").color(Color::Accent);
+    /// let my_label = Label::new(i18n::tr("Hello, World!")).color(Color::Accent);
     /// ```
     fn color(mut self, color: Color) -> Self {
         self.base = self.base.color(color);
@@ -194,7 +194,7 @@ impl LabelCommon for Label {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!").strikethrough();
+    /// let my_label = Label::new(i18n::tr("Hello, World!")).strikethrough();
     /// ```
     fn strikethrough(mut self) -> Self {
         self.base = self.base.strikethrough();
@@ -208,7 +208,7 @@ impl LabelCommon for Label {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!").italic();
+    /// let my_label = Label::new(i18n::tr("Hello, World!")).italic();
     /// ```
     fn italic(mut self) -> Self {
         self.base = self.base.italic();
@@ -222,7 +222,7 @@ impl LabelCommon for Label {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// let my_label = Label::new("Hello, World!").alpha(0.5);
+    /// let my_label = Label::new(i18n::tr("Hello, World!")).alpha(0.5);
     /// ```
     fn alpha(mut self, alpha: f32) -> Self {
         self.base = self.base.alpha(alpha);
@@ -335,13 +335,13 @@ mod tests {
     fn test_single_line_replaces_control_characters() {
         // File names are allowed to contain these, and rendering them verbatim
         // breaks the layout of tabs and project panel entries.
-        let label = Label::new("a\nb\rc\td").single_line();
+        let label = Label::new(i18n::tr("a\nb\rc\td")).single_line();
         assert_eq!(label.label, "a⏎b␍c␉d");
     }
 
     #[test]
     fn test_single_line_leaves_printable_text_alone() {
-        let label = Label::new("main.rs").single_line();
+        let label = Label::new(i18n::tr("main.rs")).single_line();
         assert_eq!(label.label, "main.rs");
     }
 
@@ -395,43 +395,43 @@ impl Component for Label {
                     example_group_with_title(
                         "Sizes",
                         vec![
-                            single_example("Default", Label::new("Project Explorer").into_any_element()),
-                            single_example("Small", Label::new("File: main.rs").size(LabelSize::Small).into_any_element()),
-                            single_example("Large", Label::new("Welcome to Zed").size(LabelSize::Large).into_any_element()),
+                            single_example("Default", Label::new(i18n::tr("Project Explorer")).into_any_element()),
+                            single_example("Small", Label::new(i18n::tr("File: main.rs")).size(LabelSize::Small).into_any_element()),
+                            single_example("Large", Label::new(i18n::tr("Welcome to Zed")).size(LabelSize::Large).into_any_element()),
                         ],
                     ),
                     example_group_with_title(
                         "Colors",
                         vec![
-                            single_example("Default", Label::new("Status: Ready").into_any_element()),
-                            single_example("Accent", Label::new("New Update Available").color(Color::Accent).into_any_element()),
-                            single_example("Error", Label::new("Build Failed").color(Color::Error).into_any_element()),
+                            single_example("Default", Label::new(i18n::tr("Status: Ready")).into_any_element()),
+                            single_example("Accent", Label::new(i18n::tr("New Update Available")).color(Color::Accent).into_any_element()),
+                            single_example("Error", Label::new(i18n::tr("Build Failed")).color(Color::Error).into_any_element()),
                         ],
                     ),
                     example_group_with_title(
                         "Styles",
                         vec![
-                            single_example("Default", Label::new("Normal Text").into_any_element()),
-                            single_example("Bold", Label::new("Important Notice").weight(gpui::FontWeight::BOLD).into_any_element()),
-                            single_example("Italic", Label::new("Code Comment").italic().into_any_element()),
-                            single_example("Strikethrough", Label::new("Deprecated Feature").strikethrough().into_any_element()),
-                            single_example("Underline", Label::new("Clickable Link").underline().into_any_element()),
-                            single_example("Inline Code", Label::new("fn main() {}").inline_code(cx).into_any_element()),
+                            single_example("Default", Label::new(i18n::tr("Normal Text")).into_any_element()),
+                            single_example("Bold", Label::new(i18n::tr("Important Notice")).weight(gpui::FontWeight::BOLD).into_any_element()),
+                            single_example("Italic", Label::new(i18n::tr("Code Comment")).italic().into_any_element()),
+                            single_example("Strikethrough", Label::new(i18n::tr("Deprecated Feature")).strikethrough().into_any_element()),
+                            single_example("Underline", Label::new(i18n::tr("Clickable Link")).underline().into_any_element()),
+                            single_example("Inline Code", Label::new(i18n::tr("fn main() {}")).inline_code(cx).into_any_element()),
                         ],
                     ),
                     example_group_with_title(
                         "Line Height Styles",
                         vec![
-                            single_example("Default", Label::new("Multi-line\nText\nExample").into_any_element()),
-                            single_example("UI Label", Label::new("Compact\nUI\nLabel").line_height_style(LineHeightStyle::UiLabel).into_any_element()),
+                            single_example("Default", Label::new(i18n::tr("Multi-line\nText\nExample")).into_any_element()),
+                            single_example("UI Label", Label::new(i18n::tr("Compact\nUI\nLabel")).line_height_style(LineHeightStyle::UiLabel).into_any_element()),
                         ],
                     ),
                     example_group_with_title(
                         "Special Cases",
                         vec![
-                            single_example("Single Line", Label::new("Line 1\nLine 2\nLine 3").single_line().into_any_element()),
-                            single_example("Regular Truncation", div().max_w_24().child(Label::new("This is a very long file name that should be truncated: very_long_file_name_with_many_words.rs").truncate()).into_any_element()),
-                            single_example("Start Truncation", div().max_w_24().child(Label::new("zed/crates/ui/src/components/label/truncate/label/label.rs").truncate_start()).into_any_element()),
+                            single_example("Single Line", Label::new(i18n::tr("Line 1\nLine 2\nLine 3")).single_line().into_any_element()),
+                            single_example("Regular Truncation", div().max_w_24().child(Label::new(i18n::tr("This is a very long file name that should be truncated: very_long_file_name_with_many_words.rs")).truncate()).into_any_element()),
+                            single_example("Start Truncation", div().max_w_24().child(Label::new(i18n::tr("zed/crates/ui/src/components/label/truncate/label/label.rs")).truncate_start()).into_any_element()),
                         ],
                     ),
                 ])

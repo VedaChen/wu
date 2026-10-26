@@ -658,7 +658,7 @@ impl StackFrameList {
                                     }
                                 }))
                                 .tooltip(move |window, cx| {
-                                    Tooltip::text("Restart Stack Frame")(window, cx)
+                                    Tooltip::text(i18n::tr("Restart Stack Frame"))(window, cx)
                                 }),
                             ),
                     )

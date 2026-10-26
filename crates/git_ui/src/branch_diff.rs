@@ -791,7 +791,7 @@ impl Render for BranchDiffToolbar {
                                 .size(IconSize::XSmall)
                                 .color(Color::Muted),
                         ),
-                        Tooltip::text("Select Base Branch"),
+                        Tooltip::text(i18n::tr("Select Base Branch")),
                     ),
             )
     }

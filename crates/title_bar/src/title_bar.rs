@@ -492,30 +492,47 @@ impl TitleBar {
         let (nickname, tooltip_title, icon) = match options {
             RemoteConnectionOptions::Ssh(options) => (
                 options.nickname.map(|nick| nick.into()),
-                "Remote Project",
+                i18n::tr("Remote Project"),
                 IconName::Server,
             ),
-            RemoteConnectionOptions::Wsl(_) => (None, "Remote Project", IconName::Linux),
+            RemoteConnectionOptions::Wsl(_) => {
+                (None, i18n::tr("Remote Project"), IconName::Linux)
+            }
             #[cfg(any(test, feature = "test-support"))]
-            RemoteConnectionOptions::Mock(_) => (None, "Mock Remote Project", IconName::Server),
+            RemoteConnectionOptions::Mock(_) => {
+                (None, i18n::tr("Mock Remote Project"), IconName::Server)
+            }
         };
 
         let nickname = nickname.unwrap_or_else(|| host.clone());
 
         let (indicator_color, meta) = match self.project.read(cx).remote_connection_state(cx)? {
-            remote::ConnectionState::Connecting => (Color::Info, format!("Connecting to: {host}")),
-            remote::ConnectionState::Connected => (Color::Success, format!("Connected to: {host}")),
+            remote::ConnectionState::Connecting => (
+                Color::Info,
+                i18n::tr_format("Connecting to: {host}", &[("host", host.as_str())]),
+            ),
+            remote::ConnectionState::Connected => (
+                Color::Success,
+                i18n::tr_format("Connected to: {host}", &[("host", host.as_str())]),
+            ),
             remote::ConnectionState::HeartbeatMissed => (
                 Color::Warning,
-                format!("Connection attempt to {host} missed. Retrying..."),
+                i18n::tr_format(
+                    "Connection attempt to {host} missed. Retrying...",
+                    &[("host", host.as_str())],
+                ),
             ),
             remote::ConnectionState::Reconnecting => (
                 Color::Warning,
-                format!("Lost connection to {host}. Reconnecting..."),
+                i18n::tr_format(
+                    "Lost connection to {host}. Reconnecting...",
+                    &[("host", host.as_str())],
+                ),
             ),
-            remote::ConnectionState::Disconnected => {
-                (Color::Error, format!("Disconnected from {host}"))
-            }
+            remote::ConnectionState::Disconnected => (
+                Color::Error,
+                i18n::tr_format("Disconnected from {host}", &[("host", host.as_str())]),
+            ),
         };
 
         let icon_color = match self.project.read(cx).remote_connection_state(cx)? {
@@ -562,7 +579,7 @@ impl TitleBar {
                         ),
                     move |_window, cx| {
                         Tooltip::with_meta(
-                            tooltip_title,
+                            tooltip_title.clone(),
                             Some(&OpenRemote::default()),
                             meta.clone(),
                             cx,
@@ -581,7 +598,7 @@ impl TitleBar {
             return None;
         }
 
-        let button = Button::new("restricted_mode_trigger", "Restricted Mode")
+        let button = Button::new("restricted_mode_trigger", i18n::tr("Restricted Mode"))
             .style(ButtonStyle::Tinted(TintColor::Warning))
             .label_size(LabelSize::Small)
             .color(Color::Warning)
@@ -592,9 +609,9 @@ impl TitleBar {
             )
             .tooltip(|_, cx| {
                 Tooltip::with_meta(
-                    "You're in Restricted Mode",
+                    i18n::tr("You're in Restricted Mode"),
                     Some(&ToggleWorktreeSecurity),
-                    "Mark this project as trusted and unlock all features",
+                    i18n::tr("Mark this project as trusted and unlock all features"),
                     cx,
                 )
             })
@@ -637,7 +654,7 @@ impl TitleBar {
         let display_name = if let Some(ref name) = name {
             util::truncate_and_trailoff(name, MAX_PROJECT_NAME_LENGTH)
         } else {
-            "Open Recent Project".to_string()
+            i18n::tr("Open Recent Project").to_string()
         };
 
         let focus_handle = workspace
@@ -677,7 +694,11 @@ impl TitleBar {
                     .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                     .when(!is_project_selected, |s| s.color(Color::Muted)),
                 move |_window, cx| {
-                    Tooltip::for_action("Recent Projects", &wu_actions::OpenRecent::default(), cx)
+                    Tooltip::for_action(
+                        i18n::tr("Recent Projects"),
+                        &wu_actions::OpenRecent::default(),
+                        cx,
+                    )
                 },
             )
             .anchor(gpui::Anchor::TopLeft)
@@ -732,7 +753,8 @@ impl TitleBar {
         let settings = TitleBarSettings::get_global(cx);
         let effective_repository = Some(repository);
 
-        let worktree_label: SharedString = linked_worktree_name.unwrap_or_else(|| "main".into());
+        let worktree_label: SharedString =
+            linked_worktree_name.unwrap_or_else(|| i18n::tr("main"));
 
         let (creation_in_progress, is_switch) = self
             .workspace
@@ -746,9 +768,9 @@ impl TitleBar {
 
         let display_label: SharedString = if let Some(ref name) = creation_in_progress {
             if is_switch {
-                format!("Loading {}…", name).into()
+                i18n::tr_format("Loading {name}…", &[("name", name.as_str())]).into()
             } else {
-                format!("Creating {}…", name).into()
+                i18n::tr_format("Creating {name}…", &[("name", name.as_str())]).into()
             }
         } else {
             worktree_label.clone()
@@ -780,9 +802,12 @@ impl TitleBar {
                         ),
                     move |_window, cx| {
                         Tooltip::with_meta(
-                            "Worktree",
+                            i18n::tr("Worktree"),
                             Some(&wu_actions::git::Worktree),
-                            format!("Currently In Use: {}", worktree_label),
+                            i18n::tr_format(
+                                "Currently In Use: {name}",
+                                &[("name", worktree_label.as_str())],
+                            ),
                             cx,
                         )
                     },
@@ -800,7 +825,7 @@ impl TitleBar {
                 };
 
                 let trigger = if is_detached_head {
-                    Button::new("project_branch_trigger", "Create Branch")
+                    Button::new("project_branch_trigger", i18n::tr("Create Branch"))
                         .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                         .label_size(LabelSize::Small)
                         .tab_index(0isize)
@@ -833,12 +858,18 @@ impl TitleBar {
                     })
                     .trigger_with_tooltip(trigger, move |_window, cx| {
                         let meta = if is_detached_head {
-                            format!("Detached HEAD: {}", branch_tooltip_label)
+                            i18n::tr_format(
+                                "Detached HEAD: {branch}",
+                                &[("branch", branch_tooltip_label.as_str())],
+                            )
                         } else {
-                            format!("Currently Checked Out: {}", branch_tooltip_label)
+                            i18n::tr_format(
+                                "Currently Checked Out: {branch}",
+                                &[("branch", branch_tooltip_label.as_str())],
+                            )
                         };
                         Tooltip::with_meta(
-                            "Branch & Stash",
+                            i18n::tr("Branch & Stash"),
                             Some(&wu_actions::git::Branch),
                             meta,
                             cx,
@@ -860,7 +891,7 @@ impl TitleBar {
                 .children(worktree_button)
                 .when(show_separator, |this| {
                     this.child(
-                        Label::new("/")
+                        Label::new(i18n::tr("/"))
                             .size(LabelSize::Small)
                             .color(Color::Muted)
                             .alpha(0.25),

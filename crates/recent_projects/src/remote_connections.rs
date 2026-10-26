@@ -295,20 +295,22 @@ pub async fn open_remote_project(
                     }
                 });
                 log::error!("Failed to open project: {e:#}");
+                let retry = i18n::tr("Retry");
+                let cancel = i18n::tr("Cancel");
                 let response = window
                     .update(cx, |_, window, cx| {
                         window.prompt(
                             PromptLevel::Critical,
-                            match connection_options {
+                            &i18n::tr(match connection_options {
                                 RemoteConnectionOptions::Ssh(_) => "Failed to connect over SSH",
                                 RemoteConnectionOptions::Wsl(_) => "Failed to connect to WSL",
                                 #[cfg(any(test, feature = "test-support"))]
                                 RemoteConnectionOptions::Mock(_) => {
                                     "Failed to connect to mock server"
                                 }
-                            },
+                            }),
                             Some(&format!("{e:#}")),
-                            &["Retry", "Cancel"],
+                            &[retry.as_ref(), cancel.as_ref()],
                             cx,
                         )
                     })?
@@ -353,20 +355,22 @@ pub async fn open_remote_project(
         match opened {
             Err(e) => {
                 log::error!("Failed to open project: {e:#}");
+                let retry = i18n::tr("Retry");
+                let cancel = i18n::tr("Cancel");
                 let response = window
                     .update(cx, |_, window, cx| {
                         window.prompt(
                             PromptLevel::Critical,
-                            match connection_options {
+                            &i18n::tr(match connection_options {
                                 RemoteConnectionOptions::Ssh(_) => "Failed to connect over SSH",
                                 RemoteConnectionOptions::Wsl(_) => "Failed to connect to WSL",
                                 #[cfg(any(test, feature = "test-support"))]
                                 RemoteConnectionOptions::Mock(_) => {
                                     "Failed to connect to mock server"
                                 }
-                            },
+                            }),
                             Some(&format!("{e:#}")),
-                            &["Retry", "Cancel"],
+                            &[retry.as_ref(), cancel.as_ref()],
                             cx,
                         )
                     })?

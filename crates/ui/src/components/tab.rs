@@ -166,13 +166,13 @@ impl Component for Tab {
                 vec![
                     single_example(
                         "Default",
-                        Tab::new("default").child("Default Tab").into_any_element(),
+                        Tab::new("default").child(i18n::tr("Default Tab")).into_any_element(),
                     ),
                     single_example(
                         "Selected",
                         Tab::new("selected")
                             .toggle_state(true)
-                            .child("Selected Tab")
+                            .child(i18n::tr("Selected Tab"))
                             .into_any_element(),
                     ),
                 ],

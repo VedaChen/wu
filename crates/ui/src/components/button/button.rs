@@ -26,7 +26,7 @@ use crate::{
 /// ```
 /// use ui::prelude::*;
 ///
-/// Button::new("button_id", "Click me!")
+/// Button::new("button_id", i18n::tr("Click me!"))
 ///     .on_click(|event, window, cx| {
 ///         // Handle click event
 ///     });
@@ -39,7 +39,7 @@ use crate::{
 /// ```
 /// use ui::prelude::*;
 ///
-/// Button::new("button_id", "Click me!")
+/// Button::new("button_id", i18n::tr("Click me!"))
 ///     .start_icon(Icon::new(IconName::Check))
 ///     .toggle_state(true)
 ///     .on_click(|event, window, cx| {
@@ -53,7 +53,7 @@ use crate::{
 /// use ui::prelude::*;
 /// use ui::TintColor;
 ///
-/// Button::new("button_id", "Click me!")
+/// Button::new("button_id", i18n::tr("Click me!"))
 ///     .toggle_state(true)
 ///     .selected_style(ButtonStyle::Tinted(TintColor::Accent))
 ///     .on_click(|event, window, cx| {
@@ -68,7 +68,7 @@ use crate::{
 /// ```
 /// use ui::prelude::*;
 ///
-/// let button = Button::new("button_id", "Click me!")
+/// let button = Button::new("button_id", i18n::tr("Click me!"))
 ///     .full_width()
 ///     .on_click(|event, window, cx| {
 ///         // Handle click event
@@ -257,7 +257,7 @@ impl Toggleable for Button {
     ///
     /// let selected = true;
     ///
-    /// Button::new("toggle_button", "Toggle Me")
+    /// Button::new("toggle_button", i18n::tr("Toggle Me"))
     ///     .start_icon(Icon::new(IconName::Check))
     ///     .toggle_state(selected)
     ///     .selected_style(ButtonStyle::Tinted(TintColor::Accent))
@@ -282,7 +282,7 @@ impl SelectableButton for Button {
     /// use ui::prelude::*;
     /// use ui::TintColor;
     ///
-    /// Button::new("styled_button", "Styled Button")
+    /// Button::new("styled_button", i18n::tr("Styled Button"))
     ///     .toggle_state(true)
     ///     .selected_style(ButtonStyle::Tinted(TintColor::Accent));
     /// ```
@@ -304,7 +304,7 @@ impl Disableable for Button {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// Button::new("disabled_button", "Can't Click Me")
+    /// Button::new("disabled_button", i18n::tr("Can't Click Me"))
     ///     .disabled(true);
     /// ```
     fn disabled(mut self, disabled: bool) -> Self {
@@ -338,7 +338,7 @@ impl FixedWidth for Button {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// Button::new("fixed_width_button", "Fixed Width")
+    /// Button::new("fixed_width_button", i18n::tr("Fixed Width"))
     ///     .width(px(100.0));
     /// ```
     fn width(mut self, width: impl Into<DefiniteLength>) -> Self {
@@ -355,7 +355,7 @@ impl FixedWidth for Button {
     /// ```
     /// use ui::prelude::*;
     ///
-    /// Button::new("full_width_button", "Full Width")
+    /// Button::new("full_width_button", i18n::tr("Full Width"))
     ///     .full_width();
     /// ```
     fn full_width(mut self) -> Self {
@@ -390,8 +390,8 @@ impl ButtonCommon for Button {
     /// ```
     /// use ui::{Tooltip, prelude::*};
     ///
-    /// Button::new("tooltip_button", "Hover Me")
-    ///     .tooltip(Tooltip::text("This is a tooltip"));
+    /// Button::new("tooltip_button", i18n::tr("Hover Me"))
+    ///     .tooltip(Tooltip::text(i18n::tr("This is a tooltip")));
     /// ```
     fn tooltip(mut self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
         self.base = self.base.tooltip(tooltip);
@@ -534,29 +534,29 @@ impl Component for Button {
                     vec![
                         single_example(
                             "Default",
-                            Button::new("default", "Default").into_any_element(),
+                            Button::new("default", i18n::tr("Default")).into_any_element(),
                         ),
                         single_example(
                             "Filled",
-                            Button::new("filled", "Filled")
+                            Button::new("filled", i18n::tr("Filled"))
                                 .style(ButtonStyle::Filled)
                                 .into_any_element(),
                         ),
                         single_example(
                             "Subtle",
-                            Button::new("outline", "Subtle")
+                            Button::new("outline", i18n::tr("Subtle"))
                                 .style(ButtonStyle::Subtle)
                                 .into_any_element(),
                         ),
                         single_example(
                             "Tinted",
-                            Button::new("tinted_accent_style", "Accent")
+                            Button::new("tinted_accent_style", i18n::tr("Accent"))
                                 .style(ButtonStyle::Tinted(TintColor::Accent))
                                 .into_any_element(),
                         ),
                         single_example(
                             "Transparent",
-                            Button::new("transparent", "Transparent")
+                            Button::new("transparent", i18n::tr("Transparent"))
                                 .style(ButtonStyle::Transparent)
                                 .into_any_element(),
                         ),
@@ -567,25 +567,25 @@ impl Component for Button {
                     vec![
                         single_example(
                             "Accent",
-                            Button::new("tinted_accent", "Accent")
+                            Button::new("tinted_accent", i18n::tr("Accent"))
                                 .style(ButtonStyle::Tinted(TintColor::Accent))
                                 .into_any_element(),
                         ),
                         single_example(
                             "Error",
-                            Button::new("tinted_negative", "Error")
+                            Button::new("tinted_negative", i18n::tr("Error"))
                                 .style(ButtonStyle::Tinted(TintColor::Error))
                                 .into_any_element(),
                         ),
                         single_example(
                             "Warning",
-                            Button::new("tinted_warning", "Warning")
+                            Button::new("tinted_warning", i18n::tr("Warning"))
                                 .style(ButtonStyle::Tinted(TintColor::Warning))
                                 .into_any_element(),
                         ),
                         single_example(
                             "Success",
-                            Button::new("tinted_positive", "Success")
+                            Button::new("tinted_positive", i18n::tr("Success"))
                                 .style(ButtonStyle::Tinted(TintColor::Success))
                                 .into_any_element(),
                         ),
@@ -596,17 +596,17 @@ impl Component for Button {
                     vec![
                         single_example(
                             "Default",
-                            Button::new("default_state", "Default").into_any_element(),
+                            Button::new("default_state", i18n::tr("Default")).into_any_element(),
                         ),
                         single_example(
                             "Disabled",
-                            Button::new("disabled", "Disabled")
+                            Button::new("disabled", i18n::tr("Disabled"))
                                 .disabled(true)
                                 .into_any_element(),
                         ),
                         single_example(
                             "Selected",
-                            Button::new("selected", "Selected")
+                            Button::new("selected", i18n::tr("Selected"))
                                 .toggle_state(true)
                                 .into_any_element(),
                         ),
@@ -617,26 +617,26 @@ impl Component for Button {
                     vec![
                         single_example(
                             "Start Icon",
-                            Button::new("icon_start", "Start Icon")
+                            Button::new("icon_start", i18n::tr("Start Icon"))
                                 .start_icon(Icon::new(IconName::Check))
                                 .into_any_element(),
                         ),
                         single_example(
                             "End Icon",
-                            Button::new("icon_end", "End Icon")
+                            Button::new("icon_end", i18n::tr("End Icon"))
                                 .end_icon(Icon::new(IconName::Check))
                                 .into_any_element(),
                         ),
                         single_example(
                             "Both Icons",
-                            Button::new("both_icons", "Both Icons")
+                            Button::new("both_icons", i18n::tr("Both Icons"))
                                 .start_icon(Icon::new(IconName::Check))
                                 .end_icon(Icon::new(IconName::ChevronDown))
                                 .into_any_element(),
                         ),
                         single_example(
                             "Icon Color",
-                            Button::new("icon_color", "Icon Color")
+                            Button::new("icon_color", i18n::tr("Icon Color"))
                                 .start_icon(Icon::new(IconName::Check).color(Color::Accent))
                                 .into_any_element(),
                         ),

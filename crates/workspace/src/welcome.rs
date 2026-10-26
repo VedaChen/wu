@@ -111,7 +111,7 @@ impl RenderOnce for SectionButton {
                                     .color(Color::Muted)
                                     .size(IconSize::Small),
                             )
-                            .child(Label::new(self.label)),
+                            .child(Label::new(i18n::tr(&self.label))),
                     )
                     .child(
                         KeyBinding::for_action_in(action_ref, &self.focus_handle, cx)
@@ -224,7 +224,7 @@ impl<const COLS: usize> Section<COLS> {
     fn render(self, index_offset: usize, focus: &FocusHandle) -> impl IntoElement {
         v_flex()
             .min_w_full()
-            .child(SectionHeader::new(self.title))
+            .child(SectionHeader::new(i18n::tr(self.title)))
             .children(
                 self.entries
                     .iter()
@@ -329,7 +329,7 @@ impl WelcomePage {
     ) -> impl IntoElement {
         v_flex()
             .w_full()
-            .child(SectionHeader::new("Recent Projects"))
+            .child(SectionHeader::new(i18n::tr("Recent Projects")))
             .children(recent_projects)
     }
 
@@ -394,9 +394,9 @@ impl Render for WelcomePage {
         };
 
         let welcome_label = if self.fallback_to_recent_projects {
-            "Welcome back to Wu"
+            i18n::tr("Welcome back to Wu")
         } else {
-            "Welcome to Wu"
+            i18n::tr("Welcome to Wu")
         };
 
         h_flex()
@@ -430,7 +430,7 @@ impl Render for WelcomePage {
                             )
                             .child(
                                 v_flex().child(Headline::new(welcome_label)).child(
-                                    Label::new("The editor for what's next")
+                                    Label::new(i18n::tr("The editor for what's next"))
                                         .size(LabelSize::Small)
                                         .color(Color::Muted)
                                         .italic(),
@@ -442,7 +442,7 @@ impl Render for WelcomePage {
                     .when(!self.fallback_to_recent_projects, |this| {
                         this.child(
                             v_flex().gap_4().child(Divider::horizontal()).child(
-                                Button::new("welcome-exit", "Return to Onboarding")
+                                Button::new("welcome-exit", i18n::tr("Return to Onboarding"))
                                     .tab_index(next_tab_index as isize)
                                     .full_width()
                                     .label_size(LabelSize::XSmall)
@@ -468,7 +468,7 @@ impl Item for WelcomePage {
     type Event = ItemEvent;
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Welcome".into()
+        i18n::tr("Welcome")
     }
 
     fn show_toolbar(&self) -> bool {

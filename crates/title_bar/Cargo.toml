@@ -38,6 +38,7 @@ db.workspace = true
 
 git_ui_core.workspace = true
 gpui.workspace = true
+i18n.workspace = true
 icons.workspace = true
 project.workspace = true
 recent_projects.workspace = true

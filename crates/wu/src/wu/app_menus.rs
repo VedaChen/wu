@@ -6,50 +6,50 @@ use wu_actions::{Quit, debug_panel, dev, git_panel, project_panel};
 pub fn app_menus(cx: &mut App) -> Vec<Menu> {
     let mut view_items = vec![
         MenuItem::action(
-            "Zoom In",
+            i18n::tr("Zoom In"),
             wu_actions::IncreaseBufferFontSize { persist: false },
         ),
         MenuItem::action(
-            "Zoom Out",
+            i18n::tr("Zoom Out"),
             wu_actions::DecreaseBufferFontSize { persist: false },
         ),
         MenuItem::action(
-            "Reset Zoom",
+            i18n::tr("Reset Zoom"),
             wu_actions::ResetBufferFontSize { persist: false },
         ),
         MenuItem::action(
-            "Reset All Zoom",
+            i18n::tr("Reset All Zoom"),
             wu_actions::ResetAllZoom { persist: false },
         ),
         MenuItem::separator(),
-        MenuItem::action("Toggle Left Dock", workspace::ToggleLeftDock),
-        MenuItem::action("Toggle Right Dock", workspace::ToggleRightDock),
-        MenuItem::action("Toggle Bottom Dock", workspace::ToggleBottomDock),
-        MenuItem::action("Toggle All Docks", workspace::ToggleAllDocks),
+        MenuItem::action(i18n::tr("Toggle Left Dock"), workspace::ToggleLeftDock),
+        MenuItem::action(i18n::tr("Toggle Right Dock"), workspace::ToggleRightDock),
+        MenuItem::action(i18n::tr("Toggle Bottom Dock"), workspace::ToggleBottomDock),
+        MenuItem::action(i18n::tr("Toggle All Docks"), workspace::ToggleAllDocks),
         MenuItem::submenu(Menu {
-            name: "Editor Layout".into(),
+            name: i18n::tr("Editor Layout"),
             disabled: false,
             items: vec![
-                MenuItem::action("Split Up", workspace::SplitUp::default()),
-                MenuItem::action("Split Down", workspace::SplitDown::default()),
-                MenuItem::action("Split Left", workspace::SplitLeft::default()),
-                MenuItem::action("Split Right", workspace::SplitRight::default()),
+                MenuItem::action(i18n::tr("Split Up"), workspace::SplitUp::default()),
+                MenuItem::action(i18n::tr("Split Down"), workspace::SplitDown::default()),
+                MenuItem::action(i18n::tr("Split Left"), workspace::SplitLeft::default()),
+                MenuItem::action(i18n::tr("Split Right"), workspace::SplitRight::default()),
             ],
         }),
         MenuItem::separator(),
-        MenuItem::action("Project Panel", project_panel::ToggleFocus),
-        MenuItem::action("Outline Panel", outline_panel::ToggleFocus),
-        MenuItem::action("Terminal Panel", terminal_panel::Toggle),
-        MenuItem::action("Debugger Panel", debug_panel::ToggleFocus),
-        MenuItem::action("Git Panel", git_panel::ToggleFocus),
+        MenuItem::action(i18n::tr("Project Panel"), project_panel::ToggleFocus),
+        MenuItem::action(i18n::tr("Outline Panel"), outline_panel::ToggleFocus),
+        MenuItem::action(i18n::tr("Terminal Panel"), terminal_panel::Toggle),
+        MenuItem::action(i18n::tr("Debugger Panel"), debug_panel::ToggleFocus),
+        MenuItem::action(i18n::tr("Git Panel"), git_panel::ToggleFocus),
         MenuItem::separator(),
-        MenuItem::action("Diagnostics", diagnostics::Deploy),
+        MenuItem::action(i18n::tr("Diagnostics"), diagnostics::Deploy),
         MenuItem::separator(),
     ];
 
     if ReleaseChannel::try_global(cx) == Some(ReleaseChannel::Dev) {
         view_items.push(MenuItem::action(
-            "Toggle GPUI Inspector",
+            i18n::tr("Toggle GPUI Inspector"),
             dev::ToggleInspector,
         ));
         view_items.push(MenuItem::separator());
@@ -57,257 +57,329 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
 
     vec![
         Menu {
-            name: "Wu".into(),
+            name: i18n::tr("Wu"),
             disabled: false,
             items: vec![
-                MenuItem::action("About Wu", wu_actions::About),
-                MenuItem::action("Check for Updates", auto_update::Check),
+                MenuItem::action(i18n::tr("About Wu"), wu_actions::About),
+                MenuItem::action(i18n::tr("Check for Updates"), auto_update::Check),
                 MenuItem::separator(),
-                MenuItem::submenu(Menu::new("Settings").items([
-                    MenuItem::action("Open Settings", wu_actions::OpenSettings),
-                    MenuItem::action("Open Settings File", super::OpenSettingsFile),
-                    MenuItem::action("Open Project Settings", wu_actions::OpenProjectSettings),
-                    MenuItem::action("Open Project Settings File", super::OpenProjectSettingsFile),
-                    MenuItem::action("Open Default Settings", super::OpenDefaultSettings),
+                MenuItem::submenu(Menu::new(i18n::tr("Settings")).items([
+                    MenuItem::action(i18n::tr("Open Settings"), wu_actions::OpenSettings),
+                    MenuItem::action(i18n::tr("Open Settings File"), super::OpenSettingsFile),
+                    MenuItem::action(
+                        i18n::tr("Open Project Settings"),
+                        wu_actions::OpenProjectSettings,
+                    ),
+                    MenuItem::action(
+                        i18n::tr("Open Project Settings File"),
+                        super::OpenProjectSettingsFile,
+                    ),
+                    MenuItem::action(
+                        i18n::tr("Open Default Settings"),
+                        super::OpenDefaultSettings,
+                    ),
                     MenuItem::separator(),
-                    MenuItem::action("Open Keymap", wu_actions::OpenKeymap),
-                    MenuItem::action("Open Keymap File", wu_actions::OpenKeymapFile),
-                    MenuItem::action("Open Default Key Bindings", wu_actions::OpenDefaultKeymap),
+                    MenuItem::action(i18n::tr("Open Keymap"), wu_actions::OpenKeymap),
+                    MenuItem::action(i18n::tr("Open Keymap File"), wu_actions::OpenKeymapFile),
+                    MenuItem::action(
+                        i18n::tr("Open Default Key Bindings"),
+                        wu_actions::OpenDefaultKeymap,
+                    ),
                     MenuItem::separator(),
                     MenuItem::action(
-                        "Select Theme...",
+                        i18n::tr("Select Theme..."),
                         wu_actions::theme_selector::Toggle::default(),
                     ),
                     MenuItem::action(
-                        "Select Icon Theme...",
+                        i18n::tr("Select Icon Theme..."),
                         wu_actions::icon_theme_selector::Toggle::default(),
                     ),
                 ])),
                 MenuItem::separator(),
                 #[cfg(target_os = "macos")]
-                MenuItem::os_submenu("Services", gpui::SystemMenuType::Services),
+                MenuItem::os_submenu(i18n::tr("Services"), gpui::SystemMenuType::Services),
                 MenuItem::separator(),
-                MenuItem::action("Extensions", wu_actions::Extensions::default()),
+                MenuItem::action(i18n::tr("Extensions"), wu_actions::Extensions::default()),
                 #[cfg(not(target_os = "windows"))]
-                MenuItem::action("Install CLI", install_cli::InstallCliBinary),
+                MenuItem::action(i18n::tr("Install CLI"), install_cli::InstallCliBinary),
                 MenuItem::separator(),
                 #[cfg(target_os = "macos")]
-                MenuItem::action("Hide Wu", super::Hide),
+                MenuItem::action(i18n::tr("Hide Wu"), super::Hide),
                 #[cfg(target_os = "macos")]
-                MenuItem::action("Hide Others", super::HideOthers),
+                MenuItem::action(i18n::tr("Hide Others"), super::HideOthers),
                 #[cfg(target_os = "macos")]
-                MenuItem::action("Show All", super::ShowAll),
+                MenuItem::action(i18n::tr("Show All"), super::ShowAll),
                 MenuItem::separator(),
-                MenuItem::action("Quit Wu", Quit),
+                MenuItem::action(i18n::tr("Quit Wu"), Quit),
             ],
         },
         Menu {
-            name: "File".into(),
+            name: i18n::tr("File"),
             disabled: false,
             items: vec![
-                MenuItem::action("New", workspace::NewFile),
-                MenuItem::action("New Window", workspace::NewWindow),
+                MenuItem::action(i18n::tr("New"), workspace::NewFile),
+                MenuItem::action(i18n::tr("New Window"), workspace::NewWindow),
                 MenuItem::separator(),
                 #[cfg(not(target_os = "macos"))]
-                MenuItem::action("Open File...", workspace::OpenFiles),
+                MenuItem::action(i18n::tr("Open File..."), workspace::OpenFiles),
                 MenuItem::action(
                     if cfg!(not(target_os = "macos")) {
-                        "Open Folder..."
+                        i18n::tr("Open Folder...")
                     } else {
-                        "Open…"
+                        i18n::tr("Open…")
                     },
                     workspace::Open::default(),
                 ),
-                MenuItem::action("Open Recent…", wu_actions::OpenRecent::default()),
-                MenuItem::action("Open Remote…", wu_actions::OpenRemote::default()),
-                MenuItem::separator(),
-                MenuItem::action("Add Folder to Project…", workspace::AddFolderToProject),
-                MenuItem::separator(),
-                MenuItem::action("Save", workspace::Save { save_intent: None }),
-                MenuItem::action("Save As…", workspace::SaveAs),
-                MenuItem::action("Save All", workspace::SaveAll { save_intent: None }),
+                MenuItem::action(i18n::tr("Open Recent…"), wu_actions::OpenRecent::default()),
+                MenuItem::action(i18n::tr("Open Remote…"), wu_actions::OpenRemote::default()),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Close Editor",
+                    i18n::tr("Add Folder to Project…"),
+                    workspace::AddFolderToProject,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(i18n::tr("Save"), workspace::Save { save_intent: None }),
+                MenuItem::action(i18n::tr("Save As…"), workspace::SaveAs),
+                MenuItem::action(
+                    i18n::tr("Save All"),
+                    workspace::SaveAll { save_intent: None },
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    i18n::tr("Close Editor"),
                     workspace::CloseActiveItem {
                         save_intent: None,
                         close_pinned: true,
                     },
                 ),
-                MenuItem::action("Close Project", workspace::CloseProject),
-                MenuItem::action("Close Window", workspace::CloseWindow),
+                MenuItem::action(i18n::tr("Close Project"), workspace::CloseProject),
+                MenuItem::action(i18n::tr("Close Window"), workspace::CloseWindow),
             ],
         },
         Menu {
-            name: "Edit".into(),
+            name: i18n::tr("Edit"),
             disabled: false,
             items: vec![
-                MenuItem::os_action("Undo", editor::actions::Undo, OsAction::Undo),
-                MenuItem::os_action("Redo", editor::actions::Redo, OsAction::Redo),
+                MenuItem::os_action(i18n::tr("Undo"), editor::actions::Undo, OsAction::Undo),
+                MenuItem::os_action(i18n::tr("Redo"), editor::actions::Redo, OsAction::Redo),
                 MenuItem::separator(),
-                MenuItem::os_action("Cut", editor::actions::Cut, OsAction::Cut),
-                MenuItem::os_action("Copy", editor::actions::Copy, OsAction::Copy),
-                MenuItem::action("Copy and Trim", editor::actions::CopyAndTrim),
-                MenuItem::os_action("Paste", editor::actions::Paste, OsAction::Paste),
+                MenuItem::os_action(i18n::tr("Cut"), editor::actions::Cut, OsAction::Cut),
+                MenuItem::os_action(i18n::tr("Copy"), editor::actions::Copy, OsAction::Copy),
+                MenuItem::action(i18n::tr("Copy and Trim"), editor::actions::CopyAndTrim),
+                MenuItem::os_action(i18n::tr("Paste"), editor::actions::Paste, OsAction::Paste),
                 MenuItem::separator(),
-                MenuItem::action("Find", search::buffer_search::Deploy::find()),
-                MenuItem::action("Find in Project", workspace::DeploySearch::default()),
+                MenuItem::action(i18n::tr("Find"), search::buffer_search::Deploy::find()),
+                MenuItem::action(
+                    i18n::tr("Find in Project"),
+                    workspace::DeploySearch::default(),
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Toggle Line Comment",
+                    i18n::tr("Toggle Line Comment"),
                     editor::actions::ToggleComments::default(),
                 ),
             ],
         },
         Menu {
-            name: "Selection".into(),
+            name: i18n::tr("Selection"),
             disabled: false,
             items: vec![
                 MenuItem::os_action(
-                    "Select All",
+                    i18n::tr("Select All"),
                     editor::actions::SelectAll,
                     OsAction::SelectAll,
                 ),
-                MenuItem::action("Expand Selection", editor::actions::SelectLargerSyntaxNode),
-                MenuItem::action("Shrink Selection", editor::actions::SelectSmallerSyntaxNode),
-                MenuItem::action("Select Next Sibling", editor::actions::SelectNextSyntaxNode),
                 MenuItem::action(
-                    "Select Previous Sibling",
+                    i18n::tr("Expand Selection"),
+                    editor::actions::SelectLargerSyntaxNode,
+                ),
+                MenuItem::action(
+                    i18n::tr("Shrink Selection"),
+                    editor::actions::SelectSmallerSyntaxNode,
+                ),
+                MenuItem::action(
+                    i18n::tr("Select Next Sibling"),
+                    editor::actions::SelectNextSyntaxNode,
+                ),
+                MenuItem::action(
+                    i18n::tr("Select Previous Sibling"),
                     editor::actions::SelectPreviousSyntaxNode,
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Add Cursor Above",
+                    i18n::tr("Add Cursor Above"),
                     editor::actions::AddSelectionAbove {
                         skip_soft_wrap: true,
                     },
                 ),
                 MenuItem::action(
-                    "Add Cursor Below",
+                    i18n::tr("Add Cursor Below"),
                     editor::actions::AddSelectionBelow {
                         skip_soft_wrap: true,
                     },
                 ),
                 MenuItem::action(
-                    "Select Next Occurrence",
+                    i18n::tr("Select Next Occurrence"),
                     editor::actions::SelectNext {
                         replace_newest: false,
                     },
                 ),
                 MenuItem::action(
-                    "Select Previous Occurrence",
+                    i18n::tr("Select Previous Occurrence"),
                     editor::actions::SelectPrevious {
                         replace_newest: false,
                     },
                 ),
-                MenuItem::action("Select All Occurrences", editor::actions::SelectAllMatches),
+                MenuItem::action(
+                    i18n::tr("Select All Occurrences"),
+                    editor::actions::SelectAllMatches,
+                ),
                 MenuItem::separator(),
-                MenuItem::action("Move Line Up", editor::actions::MoveLineUp),
-                MenuItem::action("Move Line Down", editor::actions::MoveLineDown),
-                MenuItem::action("Duplicate Selection", editor::actions::DuplicateLineDown),
+                MenuItem::action(i18n::tr("Move Line Up"), editor::actions::MoveLineUp),
+                MenuItem::action(i18n::tr("Move Line Down"), editor::actions::MoveLineDown),
+                MenuItem::action(
+                    i18n::tr("Duplicate Selection"),
+                    editor::actions::DuplicateLineDown,
+                ),
             ],
         },
         Menu {
-            name: "View".into(),
+            name: i18n::tr("View"),
             disabled: false,
             items: view_items,
         },
         Menu {
-            name: "Go".into(),
+            name: i18n::tr("Go"),
             disabled: false,
             items: vec![
-                MenuItem::action("Back", workspace::GoBack),
-                MenuItem::action("Forward", workspace::GoForward),
+                MenuItem::action(i18n::tr("Back"), workspace::GoBack),
+                MenuItem::action(i18n::tr("Forward"), workspace::GoForward),
                 MenuItem::separator(),
-                MenuItem::action("Command Palette...", wu_actions::command_palette::Toggle),
-                MenuItem::separator(),
-                MenuItem::action("Go to File...", workspace::ToggleFileFinder::default()),
-                // MenuItem::action("Go to Symbol in Project", project_symbols::Toggle),
                 MenuItem::action(
-                    "Go to Symbol in Editor...",
+                    i18n::tr("Command Palette..."),
+                    wu_actions::command_palette::Toggle,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    i18n::tr("Go to File..."),
+                    workspace::ToggleFileFinder::default(),
+                ),
+                // MenuItem::action(i18n::tr("Go to Symbol in Project"), project_symbols::Toggle),
+                MenuItem::action(
+                    i18n::tr("Go to Symbol in Editor..."),
                     wu_actions::outline::ToggleOutline,
                 ),
-                MenuItem::action("Go to Line/Column...", editor::actions::ToggleGoToLine),
+                MenuItem::action(
+                    i18n::tr("Go to Line/Column..."),
+                    editor::actions::ToggleGoToLine,
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Go to Definition",
+                    i18n::tr("Go to Definition"),
                     editor::actions::GoToDefinition::default(),
                 ),
                 MenuItem::action(
-                    "Go to Declaration",
+                    i18n::tr("Go to Declaration"),
                     editor::actions::GoToDeclaration::default(),
                 ),
                 MenuItem::action(
-                    "Go to Type Definition",
+                    i18n::tr("Go to Type Definition"),
                     editor::actions::GoToTypeDefinition::default(),
                 ),
                 MenuItem::action(
-                    "Find All References",
+                    i18n::tr("Find All References"),
                     editor::actions::FindAllReferences::default(),
                 ),
-                MenuItem::action("Show Incoming Calls", call_hierarchy::ShowIncomingCalls),
-                MenuItem::action("Show Outgoing Calls", call_hierarchy::ShowOutgoingCalls),
-                MenuItem::separator(),
-                MenuItem::action("Next Problem", editor::actions::GoToDiagnostic::default()),
                 MenuItem::action(
-                    "Previous Problem",
+                    i18n::tr("Show Incoming Calls"),
+                    call_hierarchy::ShowIncomingCalls,
+                ),
+                MenuItem::action(
+                    i18n::tr("Show Outgoing Calls"),
+                    call_hierarchy::ShowOutgoingCalls,
+                ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    i18n::tr("Next Problem"),
+                    editor::actions::GoToDiagnostic::default(),
+                ),
+                MenuItem::action(
+                    i18n::tr("Previous Problem"),
                     editor::actions::GoToPreviousDiagnostic::default(),
                 ),
             ],
         },
         Menu {
-            name: "Run".into(),
+            name: i18n::tr("Run"),
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "Spawn Task",
+                    i18n::tr("Spawn Task"),
                     wu_actions::Spawn::ViaModal {
                         reveal_target: None,
                     },
                 ),
-                MenuItem::action("Start Debugger", debugger_ui::Start),
+                MenuItem::action(i18n::tr("Start Debugger"), debugger_ui::Start),
                 MenuItem::separator(),
-                MenuItem::action("Edit tasks.json…", wu_actions::OpenProjectTasks),
-                MenuItem::action("Edit debug.json…", wu_actions::OpenProjectDebugTasks),
+                MenuItem::action(
+                    i18n::tr("Edit tasks.json…"),
+                    wu_actions::OpenProjectTasks,
+                ),
+                MenuItem::action(
+                    i18n::tr("Edit debug.json…"),
+                    wu_actions::OpenProjectDebugTasks,
+                ),
                 MenuItem::separator(),
-                MenuItem::action("Continue", debugger_ui::Continue),
-                MenuItem::action("Step Over", debugger_ui::StepOver),
-                MenuItem::action("Step Into", debugger_ui::StepInto),
-                MenuItem::action("Step Out", debugger_ui::StepOut),
+                MenuItem::action(i18n::tr("Continue"), debugger_ui::Continue),
+                MenuItem::action(i18n::tr("Step Over"), debugger_ui::StepOver),
+                MenuItem::action(i18n::tr("Step Into"), debugger_ui::StepInto),
+                MenuItem::action(i18n::tr("Step Out"), debugger_ui::StepOut),
                 MenuItem::separator(),
-                MenuItem::action("Toggle Breakpoint", editor::actions::ToggleBreakpoint),
-                MenuItem::action("Edit Breakpoint", editor::actions::EditLogBreakpoint),
-                MenuItem::action("Clear All Breakpoints", debugger_ui::ClearAllBreakpoints),
+                MenuItem::action(
+                    i18n::tr("Toggle Breakpoint"),
+                    editor::actions::ToggleBreakpoint,
+                ),
+                MenuItem::action(
+                    i18n::tr("Edit Breakpoint"),
+                    editor::actions::EditLogBreakpoint,
+                ),
+                MenuItem::action(
+                    i18n::tr("Clear All Breakpoints"),
+                    debugger_ui::ClearAllBreakpoints,
+                ),
             ],
         },
         Menu {
-            name: "Window".into(),
+            name: i18n::tr("Window"),
             disabled: false,
             items: vec![
-                MenuItem::action("Minimize", super::Minimize),
-                MenuItem::action("Zoom", super::Zoom),
+                MenuItem::action(i18n::tr("Minimize"), super::Minimize),
+                MenuItem::action(i18n::tr("Zoom"), super::Zoom),
                 MenuItem::separator(),
             ],
         },
         Menu {
-            name: "Help".into(),
+            name: i18n::tr("Help"),
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "View Release Notes Locally",
+                    i18n::tr("View Release Notes Locally"),
                     auto_update_ui::ViewReleaseNotesLocally,
                 ),
-                MenuItem::action("View Dependency Licenses", wu_actions::OpenLicenses),
-                MenuItem::action("Show Welcome", onboarding::ShowWelcome),
+                MenuItem::action(
+                    i18n::tr("View Dependency Licenses"),
+                    wu_actions::OpenLicenses,
+                ),
+                MenuItem::action(i18n::tr("Show Welcome"), onboarding::ShowWelcome),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Documentation",
+                    i18n::tr("Documentation"),
                     super::OpenBrowser {
                         url: "https://wu.dstrml.org/docs".into(),
                     },
                 ),
                 MenuItem::action(
-                    "Wu Repository",
+                    i18n::tr("Wu Repository"),
                     super::OpenBrowser {
                         url: "https://github.com/dstrml/wu".into(),
                     },

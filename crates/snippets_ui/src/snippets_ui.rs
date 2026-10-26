@@ -204,7 +204,7 @@ impl PickerDelegate for ScopeSelectorDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, _: &mut App) -> Arc<str> {
-        "Select snippet scope...".into()
+        Arc::from(i18n::tr("Select snippet scope...").as_ref())
     }
 
     fn match_count(&self) -> usize {

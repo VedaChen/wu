@@ -217,7 +217,7 @@ impl Render for QuickActionBar {
                         .icon_size(IconSize::Small)
                         .style(ButtonStyle::Subtle)
                         .toggle_state(self.toggle_selections_handle.is_deployed()),
-                    Tooltip::text("Selection Controls"),
+                    Tooltip::text(i18n::tr("Selection Controls")),
                 )
                 .with_handle(self.toggle_selections_handle.clone())
                 .anchor(Anchor::TopRight)
@@ -286,7 +286,7 @@ impl Render for QuickActionBar {
                     IconButton::new("toggle_editor_settings_icon", IconName::Filter)
                         .icon_size(IconSize::Small)
                         .toggle_state(self.toggle_settings_handle.is_deployed()),
-                    Tooltip::text("Editor Controls"),
+                    Tooltip::text(i18n::tr("Editor Controls")),
                 )
                 .anchor(Anchor::TopRight)
                 .with_handle(self.toggle_settings_handle.clone())
@@ -297,8 +297,7 @@ impl Render for QuickActionBar {
                             menu = menu.context(focus_handle);
 
                             if supports_inlay_hints {
-                                menu = menu.toggleable_entry(
-                                    "Inlay Hints",
+                                menu = menu.toggleable_entry(i18n::tr("Inlay Hints"),
                                     inlay_hints_enabled,
                                     IconPosition::Start,
                                     Some(editor::actions::ToggleInlayHints.boxed_clone()),
@@ -318,8 +317,7 @@ impl Render for QuickActionBar {
                                     },
                                 );
 
-                                menu = menu.toggleable_entry(
-                                    "Inline Values",
+                                menu = menu.toggleable_entry(i18n::tr("Inline Values"),
                                     inline_values_enabled,
                                     IconPosition::Start,
                                     Some(editor::actions::ToggleInlineValues.boxed_clone()),
@@ -341,8 +339,7 @@ impl Render for QuickActionBar {
                             }
 
                             if supports_semantic_tokens {
-                                menu = menu.toggleable_entry(
-                                    "Semantic Highlights",
+                                menu = menu.toggleable_entry(i18n::tr("Semantic Highlights"),
                                     semantic_highlights_enabled,
                                     IconPosition::Start,
                                     Some(editor::actions::ToggleSemanticHighlights.boxed_clone()),
@@ -364,8 +361,7 @@ impl Render for QuickActionBar {
                             }
 
                             if supports_code_lens {
-                                menu = menu.toggleable_entry(
-                                    "Code Lens",
+                                menu = menu.toggleable_entry(i18n::tr("Code Lens"),
                                     code_lens_enabled,
                                     IconPosition::Start,
                                     Some(editor::actions::ToggleCodeLens.boxed_clone()),
@@ -387,7 +383,7 @@ impl Render for QuickActionBar {
                             }
 
                             if supports_minimap {
-                                menu = menu.toggleable_entry("Minimap", minimap_enabled, IconPosition::Start, Some(editor::actions::ToggleMinimap.boxed_clone()), {
+                                menu = menu.toggleable_entry(i18n::tr("Minimap"), minimap_enabled, IconPosition::Start, Some(editor::actions::ToggleMinimap.boxed_clone()), {
                                     let editor = editor.clone();
                                     move |window, cx| {
                                         editor
@@ -406,8 +402,7 @@ impl Render for QuickActionBar {
                             menu = menu.separator();
 
                             if is_full {
-                                menu = menu.toggleable_entry(
-                                    "Diagnostics",
+                                menu = menu.toggleable_entry(i18n::tr("Diagnostics"),
                                     diagnostics_enabled,
                                     IconPosition::Start,
                                     Some(ToggleDiagnostics.boxed_clone()),
@@ -446,7 +441,7 @@ impl Render for QuickActionBar {
                                             }
                                         });
                                     if !diagnostics_enabled {
-                                        inline_diagnostics_item = inline_diagnostics_item.disabled(true).documentation_aside(DocumentationSide::Left, |_|  Label::new("Inline diagnostics are not available until regular diagnostics are enabled.").into_any_element());
+                                        inline_diagnostics_item = inline_diagnostics_item.disabled(true).documentation_aside(DocumentationSide::Left, |_|  Label::new(i18n::tr("Inline diagnostics are not available until regular diagnostics are enabled.")).into_any_element());
                                     }
                                     menu = menu.item(inline_diagnostics_item)
                                 }
@@ -454,8 +449,7 @@ impl Render for QuickActionBar {
                                 menu = menu.separator();
                             }
 
-                            menu = menu.toggleable_entry(
-                                "Line Numbers",
+                            menu = menu.toggleable_entry(i18n::tr("Line Numbers"),
                                 show_line_numbers,
                                 IconPosition::Start,
                                 Some(editor::actions::ToggleLineNumbers.boxed_clone()),
@@ -475,8 +469,7 @@ impl Render for QuickActionBar {
                                 },
                             );
 
-                            menu = menu.toggleable_entry(
-                                "Selection Menu",
+                            menu = menu.toggleable_entry(i18n::tr("Selection Menu"),
                                 selection_menu_enabled,
                                 IconPosition::Start,
                                 Some(editor::actions::ToggleSelectionMenu.boxed_clone()),
@@ -496,8 +489,7 @@ impl Render for QuickActionBar {
                                 },
                             );
 
-                            menu = menu.toggleable_entry(
-                                "Auto Signature Help",
+                            menu = menu.toggleable_entry(i18n::tr("Auto Signature Help"),
                                 auto_signature_help_enabled,
                                 IconPosition::Start,
                                 Some(editor::actions::ToggleAutoSignatureHelp.boxed_clone()),
@@ -519,8 +511,7 @@ impl Render for QuickActionBar {
 
                             menu = menu.separator();
 
-                            menu = menu.toggleable_entry(
-                                "Inline Git Blame",
+                            menu = menu.toggleable_entry(i18n::tr("Inline Git Blame"),
                                 git_blame_inline_enabled,
                                 IconPosition::Start,
                                 Some(editor::actions::ToggleGitBlameInline.boxed_clone()),
@@ -540,8 +531,7 @@ impl Render for QuickActionBar {
                                 },
                             );
 
-                            menu = menu.toggleable_entry(
-                                "Column Git Blame",
+                            menu = menu.toggleable_entry(i18n::tr("Column Git Blame"),
                                 show_git_blame_gutter,
                                 IconPosition::Start,
                                 Some(git::Blame.boxed_clone()),
@@ -562,8 +552,7 @@ impl Render for QuickActionBar {
                             );
 
                             if let Some(fs) = fs.clone() {
-                                menu = menu.toggleable_entry(
-                                    "Diff Against Default Branch",
+                                menu = menu.toggleable_entry(i18n::tr("Diff Against Default Branch"),
                                     diff_against_default_branch,
                                     IconPosition::Start,
                                     None,

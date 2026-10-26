@@ -13,6 +13,7 @@ path = "src/agent_chat.rs"
 doctest = false
 
 [dependencies]
+i18n.workspace = true
 agent_harness.workspace = true
 anyhow.workspace = true
 chrono.workspace = true

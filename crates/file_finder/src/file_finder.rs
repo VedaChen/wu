@@ -1247,7 +1247,10 @@ impl FileFinderDelegate {
                 }
                 Match::Search(path_match) => self.labels_for_path_match(&path_match.0, path_style),
                 Match::CreateNew(project_path) => (
-                    format!("Create File: {}", project_path.path.display(path_style)),
+                    i18n::tr_format(
+                        "Create File: {path}",
+                        &[("path", &project_path.path.display(path_style).to_string())],
+                    ),
                     vec![],
                     String::from(""),
                     vec![],
@@ -1688,7 +1691,7 @@ impl PickerDelegate for FileFinderDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search project files...".into()
+        Arc::from(i18n::tr("Search project files...").as_ref())
     }
 
     fn searchbar_trailer(
@@ -1701,16 +1704,16 @@ impl PickerDelegate for FileFinderDelegate {
         // Clicking includes ignored files unless they're already included, in
         // which case it excludes them again (see `handle_toggle_ignored`).
         let tooltip_label = if including_ignored {
-            "Exclude Ignored Files"
+            i18n::tr("Exclude Ignored Files")
         } else {
-            "Include Ignored Files"
+            i18n::tr("Include Ignored Files")
         };
 
         let filter_button = IconButton::new("filter-ignored", IconName::FileIgnored)
             .icon_size(IconSize::Small)
             .toggle_state(including_ignored)
             .tooltip(move |_window, cx| {
-                Tooltip::for_action_in(tooltip_label, &ToggleIncludeIgnored, &focus_handle, cx)
+                Tooltip::for_action_in(tooltip_label.clone(), &ToggleIncludeIgnored, &focus_handle, cx)
             })
             .on_click(|_, window, cx| {
                 window.dispatch_action(ToggleIncludeIgnored.boxed_clone(), cx)
@@ -1961,9 +1964,9 @@ impl PickerDelegate for FileFinderDelegate {
                     ..Default::default()
                 };
                 let mut message = picker::HighlightedTextBuilder::default();
-                message.push_plain("Create file ");
+                message.push_plain(i18n::tr("Create file "));
                 message.push_styled(project_path.path.display(path_style), path_highlight);
-                message.push_plain("?");
+                message.push_plain(i18n::tr("?"));
                 Some(picker::PreviewUpdate::message(message.build()))
             }
             _ => Some(picker::PreviewUpdate::from_path(
@@ -1999,16 +2002,25 @@ impl PickerDelegate for FileFinderDelegate {
         _cx: &mut Context<Picker<Self>>,
     ) -> Vec<picker::PickerAction> {
         let open_label: SharedString = if self.selected_matches.len() > 1 {
-            "Open multiple".into()
+            i18n::tr("Open multiple")
         } else {
-            "Open File".into()
+            i18n::tr("Open File")
         };
         vec![
-            picker::PickerAction::header("Split…"),
-            picker::PickerAction::button("Left", pane::SplitLeft::default().boxed_clone()),
-            picker::PickerAction::button("Right", pane::SplitRight::default().boxed_clone()),
-            picker::PickerAction::button("Up", pane::SplitUp::default().boxed_clone()),
-            picker::PickerAction::button("Down", pane::SplitDown::default().boxed_clone()),
+            picker::PickerAction::header(i18n::tr("Split…")),
+            picker::PickerAction::button(
+                i18n::tr("Left"),
+                pane::SplitLeft::default().boxed_clone(),
+            ),
+            picker::PickerAction::button(
+                i18n::tr("Right"),
+                pane::SplitRight::default().boxed_clone(),
+            ),
+            picker::PickerAction::button(i18n::tr("Up"), pane::SplitUp::default().boxed_clone()),
+            picker::PickerAction::button(
+                i18n::tr("Down"),
+                pane::SplitDown::default().boxed_clone(),
+            ),
             picker::PickerAction::separator(),
             picker::PickerAction::button(open_label, menu::Confirm.boxed_clone()),
         ]

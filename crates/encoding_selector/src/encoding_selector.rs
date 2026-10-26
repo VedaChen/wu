@@ -60,7 +60,7 @@ impl EncodingSelector {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
-                    "Save file to change encoding",
+                    i18n::tr("Save file to change encoding"),
                 ),
                 cx,
             );
@@ -70,7 +70,7 @@ impl EncodingSelector {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
-                    "Cannot change encoding of remote server file",
+                    i18n::tr("Cannot change encoding of remote server file"),
                 ),
                 cx,
             );
@@ -139,7 +139,10 @@ impl EncodingSelectorDelegate {
         let current_encoding = self.buffer.read(cx).encoding();
 
         if candidate_encoding.name() == current_encoding.name() {
-            format!("{} (current)", candidate_encoding.name())
+            i18n::tr_format(
+                "{name} (current)",
+                &[("name", candidate_encoding.name())],
+            )
         } else {
             candidate_encoding.name().to_string()
         }
@@ -215,7 +218,7 @@ impl PickerDelegate for EncodingSelectorDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Reopen with encoding...".into()
+        Arc::from(i18n::tr("Reopen with encoding...").as_ref())
     }
 
     fn match_count(&self) -> usize {

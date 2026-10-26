@@ -68,9 +68,9 @@ impl DiffHunkRenderer for StagedDiffHunkRenderer {
             .block_mouse_except_scroll()
             .shadow_md()
             .child(
-                Button::new(("unstage", row as u64), "Unstage")
+                Button::new(("unstage", row as u64), i18n::tr("Unstage"))
                     .alpha(if status.is_pending() { 0.66 } else { 1.0 })
-                    .tooltip(Tooltip::text("Unstage Hunk"))
+                    .tooltip(Tooltip::text(i18n::tr("Unstage Hunk")))
                     .on_click({
                         let editor = editor.clone();
                         move |_event, window, cx| {
@@ -621,9 +621,9 @@ impl Render for StagedDiffToolbar {
                 h_group_sm()
                     .when(button_states.selection, |this| {
                         this.child(
-                            Button::new("unstage", "Unstage")
+                            Button::new("unstage", i18n::tr("Unstage"))
                                 .disabled(!button_states.unstage)
-                                .tooltip(Tooltip::text("Unstage Selected Hunks"))
+                                .tooltip(Tooltip::text(i18n::tr("Unstage Selected Hunks")))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.unstage_selected_staged_hunks(false, window, cx)
                                 })),
@@ -631,7 +631,7 @@ impl Render for StagedDiffToolbar {
                     })
                     .when(!button_states.selection, |this| {
                         this.child(
-                            Button::new("unstage", "Unstage")
+                            Button::new("unstage", i18n::tr("Unstage"))
                                 .disabled(!button_states.unstage)
                                 .tooltip(Tooltip::for_action_title_in(
                                     "Unstage and Go to Next Hunk",
@@ -646,7 +646,7 @@ impl Render for StagedDiffToolbar {
             )
             .child(Divider::vertical())
             .child(
-                Button::new("unstage-all", "Unstage All")
+                Button::new("unstage-all", i18n::tr("Unstage All"))
                     .width(rems_from_px(80_f32))
                     .disabled(!button_states.unstage_all)
                     .tooltip(Tooltip::for_action_title_in(
@@ -658,7 +658,7 @@ impl Render for StagedDiffToolbar {
             )
             .child(Divider::vertical())
             .child(
-                Button::new("commit", "Commit")
+                Button::new("commit", i18n::tr("Commit"))
                     .tooltip(Tooltip::for_action_title_in(
                         "Commit",
                         &Commit,

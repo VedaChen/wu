@@ -6011,7 +6011,7 @@ impl ProjectPanel {
                     .selectable(false)
                     .child(
                         h_flex().h_6().child(
-                            Label::new("Empty")
+                            Label::new(i18n::tr("Empty"))
                                 .single_line()
                                 .italic()
                                 .color(Color::Placeholder),

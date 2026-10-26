@@ -1127,7 +1127,7 @@ impl TerminalBuilder {
             // and the Project doesn't have a locale set, then
             // set a fallback for our child environment to use.
             if std::env::var("LANG").is_err() {
-                env.entry("LANG".to_string())
+                env.entry(i18n::tr("LANG").to_string())
                     .or_insert_with(|| "en_US.UTF-8".to_string());
             }
 

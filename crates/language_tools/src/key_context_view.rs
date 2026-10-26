@@ -196,19 +196,19 @@ impl Render for KeyContextView {
                     });
                 }),
             )
-            .child(Label::new("Keyboard Context").size(LabelSize::Large))
-            .child(Label::new("This view lets you determine the current context stack for creating custom key bindings in Wu. When a keyboard shortcut is triggered, it also shows all the possible contexts it could have triggered in, and which one matched."))
+            .child(Label::new(i18n::tr("Keyboard Context")).size(LabelSize::Large))
+            .child(Label::new(i18n::tr("This view lets you determine the current context stack for creating custom key bindings in Wu. When a keyboard shortcut is triggered, it also shows all the possible contexts it could have triggered in, and which one matched.")))
             .child(
                 h_flex()
                     .mt_4()
                     .gap_4()
                     .child(
-                        Button::new("open_documentation", "Open Documentation")
+                        Button::new("open_documentation", i18n::tr("Open Documentation"))
                             .style(ButtonStyle::Filled)
                             .on_click(|_, _, cx| cx.open_url("https://zed.dev/docs/key-bindings")),
                     )
                     .child(
-                        Button::new("view_default_keymap", "View Default Keymap")
+                        Button::new("view_default_keymap", i18n::tr("View Default Keymap"))
                             .style(ButtonStyle::Filled)
                             .key_binding(ui::KeyBinding::for_action(
                                 &wu_actions::OpenDefaultKeymap,
@@ -219,7 +219,7 @@ impl Render for KeyContextView {
                             }),
                     )
                     .child(
-                        Button::new("edit_your_keymap", "Edit Keymap File")
+                        Button::new("edit_your_keymap", i18n::tr("Edit Keymap File"))
                             .style(ButtonStyle::Filled)
                             .key_binding(ui::KeyBinding::for_action(&wu_actions::OpenKeymapFile, cx))
                             .on_click(|_, window, cx| {
@@ -228,7 +228,7 @@ impl Render for KeyContextView {
                     ),
             )
             .child(
-                Label::new("Current Context Stack")
+                Label::new(i18n::tr("Current Context Stack"))
                     .size(LabelSize::Large)
                     .mt_8(),
             )
@@ -248,7 +248,7 @@ impl Render for KeyContextView {
                     Label::new(format!("{} {}", primary, secondary)).ml(px(12. * (i + 1) as f32))
                 })
             })
-            .child(Label::new("Last Keystroke").mt_4().size(LabelSize::Large))
+            .child(Label::new(i18n::tr("Last Keystroke")).mt_4().size(LabelSize::Large))
             .when_some(self.pending_keystrokes.as_ref(), |el, keystrokes| {
                 el.child(
                     Label::new(format!(
@@ -279,8 +279,8 @@ impl Render for KeyContextView {
                     )
             })
             .when_some(key_equivalents, |el, key_equivalents| {
-                el.child(Label::new("Key Equivalents").mt_4().size(LabelSize::Large))
-                    .child(Label::new("Shortcuts defined using some characters have been remapped so that shortcuts can be typed without holding option."))
+                el.child(Label::new(i18n::tr("Key Equivalents")).mt_4().size(LabelSize::Large))
+                    .child(Label::new(i18n::tr("Shortcuts defined using some characters have been remapped so that shortcuts can be typed without holding option.")))
                     .children(
                         key_equivalents
                             .iter()

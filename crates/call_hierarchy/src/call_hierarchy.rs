@@ -541,14 +541,20 @@ impl PickerDelegate for CallHierarchyDelegate {
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
         match (&self.root_item, self.mode) {
-            (Some(root), CallHierarchyMode::Incoming) => {
-                Arc::from(format!("Search calls to `{}`...", root.name))
+            (Some(root), CallHierarchyMode::Incoming) => Arc::from(i18n::tr_format(
+                "Search calls to `{name}`...",
+                &[("name", &root.name)],
+            )),
+            (Some(root), CallHierarchyMode::Outgoing) => Arc::from(i18n::tr_format(
+                "Search calls from `{name}`...",
+                &[("name", &root.name)],
+            )),
+            (None, CallHierarchyMode::Incoming) => {
+                Arc::from(i18n::tr("Search incoming calls...").as_ref())
             }
-            (Some(root), CallHierarchyMode::Outgoing) => {
-                Arc::from(format!("Search calls from `{}`...", root.name))
+            (None, CallHierarchyMode::Outgoing) => {
+                Arc::from(i18n::tr("Search outgoing calls...").as_ref())
             }
-            (None, CallHierarchyMode::Incoming) => Arc::from("Search incoming calls..."),
-            (None, CallHierarchyMode::Outgoing) => Arc::from("Search outgoing calls..."),
         }
     }
 
@@ -561,20 +567,20 @@ impl PickerDelegate for CallHierarchyDelegate {
     }
 
     fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
-        Some(SharedString::new_static(match self.state {
-            FetchState::Loading => "Fetching call hierarchy…",
-            FetchState::NoSymbol => "No callable symbol under the cursor",
+        Some(match self.state {
+            FetchState::Loading => i18n::tr("Fetching call hierarchy…"),
+            FetchState::NoSymbol => i18n::tr("No callable symbol under the cursor"),
             FetchState::Loaded => {
                 if self.calls.is_empty() {
                     match self.mode {
-                        CallHierarchyMode::Incoming => "No incoming calls found",
-                        CallHierarchyMode::Outgoing => "No outgoing calls found",
+                        CallHierarchyMode::Incoming => i18n::tr("No incoming calls found"),
+                        CallHierarchyMode::Outgoing => i18n::tr("No outgoing calls found"),
                     }
                 } else {
-                    "No matches"
+                    i18n::tr("No matches")
                 }
             }
-        }))
+        })
     }
 
     fn set_selected_index(
@@ -697,8 +703,8 @@ impl PickerDelegate for CallHierarchyDelegate {
         }
         let focus_handle = self.focus_handle.clone();
         let expand_label = match self.mode {
-            CallHierarchyMode::Incoming => "Show Callers",
-            CallHierarchyMode::Outgoing => "Show Callees",
+            CallHierarchyMode::Incoming => i18n::tr("Show Callers"),
+            CallHierarchyMode::Outgoing => i18n::tr("Show Callees"),
         };
         Some(
             h_flex()
@@ -711,7 +717,7 @@ impl PickerDelegate for CallHierarchyDelegate {
                 .border_color(cx.theme().colors().border_variant)
                 .when(!self.root_stack.is_empty(), |this| {
                     this.child(
-                        Button::new("collapse-call", "Back")
+                        Button::new("collapse-call", i18n::tr("Back"))
                             .key_binding(
                                 KeyBinding::for_action_in(&menu::SelectParent, &focus_handle, cx)
                                     .map(|key_binding| key_binding.size(rems_from_px(12_f32))),
@@ -734,7 +740,7 @@ impl PickerDelegate for CallHierarchyDelegate {
                     )
                 })
                 .child(
-                    Button::new("toggle-direction", "Switch Direction")
+                    Button::new("toggle-direction", i18n::tr("Switch Direction"))
                         .key_binding(
                             KeyBinding::for_action_in(&ToggleDirection, &focus_handle, cx)
                                 .map(|key_binding| key_binding.size(rems_from_px(12_f32))),
@@ -1101,7 +1107,11 @@ fn compute_call_display(call: &Call, cx: &App) -> CallDisplay {
     let path = call_display_path(buffer, cx).map(|path| {
         let path = path.to_string_lossy();
         SharedString::from(if call.site_count > 1 {
-            format!("{path}:{line_number} ({} calls)", call.site_count)
+            let calls = i18n::tr_format(
+                "({count} calls)",
+                &[("count", &call.site_count.to_string())],
+            );
+            format!("{path}:{line_number} {calls}")
         } else {
             format!("{path}:{line_number}")
         })

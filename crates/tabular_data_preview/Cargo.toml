@@ -8,6 +8,7 @@ edition.workspace = true
 path = "src/tabular_data_preview.rs"
 
 [dependencies]
+i18n.workspace = true
 anyhow.workspace = true
 fuzzy.workspace = true
 gpui.workspace = true

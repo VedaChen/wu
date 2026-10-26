@@ -403,7 +403,7 @@ impl ComponentPreview {
                 let selected = self.active_page == PreviewPage::AllComponents;
 
                 ListItem::new(ix)
-                    .child(Label::new("All Components"))
+                    .child(Label::new(i18n::tr("All Components")))
                     .selectable(true)
                     .toggle_state(selected)
                     .inset(true)
@@ -546,7 +546,7 @@ impl ComponentPreview {
                 .size_full()
                 .items_center()
                 .justify_center()
-                .child("Component not found")
+                .child(i18n::tr("Component not found"))
                 .into_any_element()
         }
     }
@@ -644,7 +644,7 @@ impl Render for ComponentPreview {
                             .border_t_1()
                             .border_color(cx.theme().colors().border)
                             .child(
-                                Button::new("toast-test", "Launch Toast")
+                                Button::new("toast-test", i18n::tr("Launch Toast"))
                                     .full_width()
                                     .on_click(cx.listener({
                                         move |this, _, _window, cx| {

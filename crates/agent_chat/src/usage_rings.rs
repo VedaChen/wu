@@ -261,7 +261,7 @@ fn meta_line(fragments: Vec<AnyElement>, cx: &App) -> gpui::Div {
         .text_color(muted);
     for (index, fragment) in fragments.into_iter().enumerate() {
         if index > 0 {
-            line = line.child(div().text_color(muted.opacity(0.3)).child("·"));
+            line = line.child(div().text_color(muted.opacity(0.3)).child(i18n::tr("·")));
         }
         line = line.child(div().min_w_0().max_w_full().child(fragment));
     }
@@ -415,7 +415,7 @@ impl Render for UsageCard {
                             div()
                                 .text_size(px(12.))
                                 .text_color(colors.text_muted)
-                                .child("Loading…"),
+                                .child(i18n::tr("Loading…")),
                         )
                     }),
             )
@@ -451,12 +451,12 @@ impl UsageCard {
                 .map(|plan| div().child(plan.clone()).into_any_element())
                 .collect();
             if account.active {
-                meta.push(div().text_color(accent(cx)).child("In use").into_any_element());
+                meta.push(div().text_color(accent(cx)).child(i18n::tr("In use")).into_any_element());
             } else if let Some(reason) = usage_error {
                 meta.push(div().child(reason).into_any_element());
             }
             if switching.as_deref() == Some(account.id.as_str()) {
-                meta.push(div().child("Switching…").into_any_element());
+                meta.push(div().child(i18n::tr("Switching…")).into_any_element());
             }
             let account_id = account.id.clone();
             let active = account.active;
@@ -529,7 +529,7 @@ impl UsageCard {
                 .pb(px(6.))
                 .text_size(ui(11.))
                 .text_color(text_faint(cx))
-                .child("Sign in to another account in the CLI and Wu remembers it here.")
+                .child(i18n::tr("Sign in to another account in the CLI and Wu remembers it here."))
                 .into_any_element(),
         );
         Some(elements)
@@ -555,7 +555,7 @@ mod tests {
                     div().debug_selector(|| "context-chip".into()).child(
                         PopoverMenu::new("context")
                             .with_handle(self.card.clone())
-                            .trigger(Button::new("context-trigger", "Context"))
+                            .trigger(Button::new("context-trigger", i18n::tr("Context")))
                             .menu(|_, cx| Some(cx.new(|cx| ContextCard::new(None, cx)))),
                     ),
                 )

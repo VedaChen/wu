@@ -12,9 +12,9 @@ use gpui::{AnyElement, IntoElement, ParentElement, Styled};
 ///
 /// Banner::new()
 ///     .severity(Severity::Success)
-///     .children([Label::new("This is a success message")])
+///     .children([Label::new(i18n::tr("This is a success message"))])
 ///     .action_slot(
-///         Button::new("learn-more", "Learn More")
+///         Button::new("learn-more", i18n::tr("Learn More"))
 ///             .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::Small)),
 ///     );
 /// ```
@@ -144,16 +144,16 @@ impl Component for Banner {
             single_example(
                 "Default",
                 Banner::new()
-                    .child(Label::new("This is a default banner with no customization"))
+                    .child(Label::new(i18n::tr("This is a default banner with no customization")))
                     .into_any_element(),
             ),
             single_example(
                 "Info",
                 Banner::new()
                     .severity(Severity::Info)
-                    .child(Label::new("This is an informational message"))
+                    .child(Label::new(i18n::tr("This is an informational message")))
                     .action_slot(
-                        Button::new("learn-more", "Learn More")
+                        Button::new("learn-more", i18n::tr("Learn More"))
                             .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::Small)),
                     )
                     .into_any_element(),
@@ -162,24 +162,24 @@ impl Component for Banner {
                 "Success",
                 Banner::new()
                     .severity(Severity::Success)
-                    .child(Label::new("Operation completed successfully"))
-                    .action_slot(Button::new("dismiss", "Dismiss"))
+                    .child(Label::new(i18n::tr("Operation completed successfully")))
+                    .action_slot(Button::new("dismiss", i18n::tr("Dismiss")))
                     .into_any_element(),
             ),
             single_example(
                 "Warning",
                 Banner::new()
                     .severity(Severity::Warning)
-                    .child(Label::new("Your settings file uses deprecated settings"))
-                    .action_slot(Button::new("update", "Update Settings"))
+                    .child(Label::new(i18n::tr("Your settings file uses deprecated settings")))
+                    .action_slot(Button::new("update", i18n::tr("Update Settings")))
                     .into_any_element(),
             ),
             single_example(
                 "Error",
                 Banner::new()
                     .severity(Severity::Error)
-                    .child(Label::new("Connection error: unable to connect to server"))
-                    .action_slot(Button::new("reconnect", "Retry"))
+                    .child(Label::new(i18n::tr("Connection error: unable to connect to server")))
+                    .action_slot(Button::new("reconnect", i18n::tr("Retry")))
                     .into_any_element(),
             ),
         ];

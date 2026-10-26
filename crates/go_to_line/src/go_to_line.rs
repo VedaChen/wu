@@ -133,11 +133,13 @@ impl GoToLine {
         });
         let line_editor_change = cx.subscribe_in(&line_editor, window, Self::on_line_editor_event);
 
-        let current_text = format!(
-            "Current Line: {} of {} (column {})",
-            line,
-            last_line + 1,
-            column
+        let current_text = i18n::tr_format(
+            "Current Line: {line} of {last_line} (column {column})",
+            &[
+                ("line", &line.to_string()),
+                ("last_line", &(last_line + 1).to_string()),
+                ("column", &column.to_string()),
+            ],
         );
 
         Self {
@@ -313,13 +315,27 @@ impl Render for GoToLine {
             } else {
                 self.current_line.saturating_sub(offset.unsigned_abs())
             };
-            format!("Go to line {target_line} ({offset:+} from current)").into()
+            i18n::tr_format(
+                "Go to line {line} ({offset} from current)",
+                &[
+                    ("line", &target_line.to_string()),
+                    ("offset", &format!("{offset:+}")),
+                ],
+            )
+            .into()
         } else {
             match self.line_and_char_from_query(cx) {
-                Some((line, Some(character))) => {
-                    format!("Go to line {line}, character {character}").into()
+                Some((line, Some(character))) => i18n::tr_format(
+                    "Go to line {line}, character {character}",
+                    &[
+                        ("line", &line.to_string()),
+                        ("character", &character.to_string()),
+                    ],
+                )
+                .into(),
+                Some((line, None)) => {
+                    i18n::tr_format("Go to line {line}", &[("line", &line.to_string())]).into()
                 }
-                Some((line, None)) => format!("Go to line {line}").into(),
                 None => self.current_text.clone(),
             }
         };

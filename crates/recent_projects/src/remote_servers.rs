@@ -157,7 +157,7 @@ impl EditNicknameState {
             .and_then(|state| state.nickname)
             .filter(|text| !text.is_empty());
         this.editor.update(cx, |this, cx| {
-            this.set_placeholder_text("Add a nickname for this server", window, cx);
+            this.set_placeholder_text(i18n::tr("Add a nickname for this server").as_ref(), window, cx);
             if let Some(starting_text) = starting_text {
                 this.set_text(starting_text, window, cx);
             }
@@ -786,7 +786,7 @@ impl RemoteServerPickerDelegate {
                         .text_ellipsis()
                         .when(is_wsl, |this| {
                             this.child(
-                                Label::new("WSL:")
+                                Label::new(i18n::tr("WSL:"))
                                     .size(LabelSize::Small)
                                     .color(Color::Muted),
                             )
@@ -809,7 +809,7 @@ impl RemoteServerPickerDelegate {
         &self,
         ix: usize,
         icon: IconName,
-        label: &'static str,
+        label: SharedString,
         selected: bool,
     ) -> AnyElement {
         ListItem::new(("remote-action", ix))
@@ -855,11 +855,11 @@ impl PickerDelegate for RemoteServerPickerDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        "Search remote projects…".into()
+        Arc::from(i18n::tr("Search remote projects…").as_ref())
     }
 
     fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
-        Some("No matching remote projects.".into())
+        Some(i18n::tr("No matching remote projects."))
     }
 
     fn update_matches(
@@ -1016,19 +1016,28 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                 server,
                 host_positions,
             } => self.render_server_header(*server, host_positions),
-            RemoteMatch::AddServer => {
-                Some(self.render_action_item(ix, IconName::Plus, "Connect SSH Server", selected))
-            }
-            RemoteMatch::AddWsl => {
-                Some(self.render_action_item(ix, IconName::Plus, "Add WSL Distro", selected))
-            }
-            RemoteMatch::OpenFolder { .. } => {
-                Some(self.render_action_item(ix, IconName::Plus, "Open Folder", selected))
-            }
+            RemoteMatch::AddServer => Some(self.render_action_item(
+                ix,
+                IconName::Plus,
+                i18n::tr("Connect SSH Server"),
+                selected,
+            )),
+            RemoteMatch::AddWsl => Some(self.render_action_item(
+                ix,
+                IconName::Plus,
+                i18n::tr("Add WSL Distro"),
+                selected,
+            )),
+            RemoteMatch::OpenFolder { .. } => Some(self.render_action_item(
+                ix,
+                IconName::Plus,
+                i18n::tr("Open Folder"),
+                selected,
+            )),
             RemoteMatch::ViewServerOptions { .. } => Some(self.render_action_item(
                 ix,
                 IconName::Settings,
-                "View Server Options",
+                i18n::tr("View Server Options"),
                 selected,
             )),
             RemoteMatch::Project {
@@ -1070,7 +1079,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                                     .icon_size(IconSize::Small)
                                     .shape(IconButtonShape::Square)
                                     .size(ButtonSize::Large)
-                                    .tooltip(Tooltip::text("Delete Remote Project"))
+                                    .tooltip(Tooltip::text(i18n::tr("Delete Remote Project")))
                                     .on_click(cx.listener(move |_, _, _, cx| {
                                         let remote_project = remote_project.clone();
                                         remote_server_projects
@@ -1112,16 +1121,16 @@ impl PickerDelegate for RemoteServerPickerDelegate {
             h_flex()
                 .gap_1()
                 .child(
-                    Button::new("open_new_window", "New Window")
+                    Button::new("open_new_window", i18n::tr("New Window"))
                         .key_binding(KeyBinding::for_action(&menu::SecondaryConfirm, cx))
                         .on_click(|_, window, cx| {
                             window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
                         }),
                 )
-                .child(confirm_button("Open".into()))
+                .child(confirm_button(i18n::tr("Open")))
                 .into_any_element()
         } else {
-            confirm_button("Select".into()).into_any_element()
+            confirm_button(i18n::tr("Select")).into_any_element()
         };
 
         Some(
@@ -1315,7 +1324,7 @@ impl RemoteServerProjects {
             window,
             cx,
         )
-        .prompt_err("Failed to connect", window, cx, |_, _, _| None);
+        .prompt_err(&i18n::tr("Failed to connect"), window, cx, |_, _, _| None);
 
         let address_editor = editor.clone();
         let creating = cx.spawn_in(window, async move |this, cx| {
@@ -1388,7 +1397,7 @@ impl RemoteServerProjects {
             window,
             cx,
         )
-        .prompt_err("Failed to connect", window, cx, |_, _, _| None);
+        .prompt_err(&i18n::tr("Failed to connect"), window, cx, |_, _, _| None);
 
         let wsl_picker = picker.clone();
         let creating = cx.spawn_in(window, async move |this, cx| {
@@ -1491,7 +1500,7 @@ impl RemoteServerProjects {
                     window,
                     cx,
                 )
-                .prompt_err("Failed to connect", window, cx, |_, _, _| None);
+                .prompt_err(&i18n::tr("Failed to connect"), window, cx, |_, _, _| None);
 
                 cx.spawn_in(window, async move |workspace, cx| {
                     let session = connect.await;
@@ -1675,11 +1684,12 @@ impl RemoteServerProjects {
             .await;
             if let Err(e) = result {
                 log::error!("Failed to connect: {e:#}");
+                let ok = i18n::tr("OK");
                 cx.prompt(
                     gpui::PromptLevel::Critical,
-                    "Failed to connect",
+                    i18n::tr("Failed to connect").as_ref(),
                     Some(&e.to_string()),
-                    &["OK"],
+                    &[ok.as_ref()],
                 )
                 .await
                 .ok();
@@ -1849,13 +1859,15 @@ impl RemoteServerProjects {
                                     .gap_1()
                                     .child(
                                         Label::new(
-                                            "Enter the command you use to SSH into this server.",
+                                            i18n::tr(
+                                                "Enter the command you use to SSH into this server.",
+                                            ),
                                         )
                                         .color(Color::Muted)
                                         .size(LabelSize::Small),
                                     )
                                     .child(
-                                        Button::new("learn-more", "Learn More")
+                                        Button::new("learn-more", i18n::tr("Learn More"))
                                             .label_size(LabelSize::Small)
                                             .end_icon(
                                                 Icon::new(IconName::ArrowUpRight)
@@ -1978,7 +1990,7 @@ impl RemoteServerProjects {
                                         .start_slot(
                                             Icon::new(IconName::ArrowLeft).color(Color::Muted),
                                         )
-                                        .child(Label::new("Go Back"))
+                                        .child(Label::new(i18n::tr("Go Back")))
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.mode =
                                                 Mode::default_mode(&this.ssh_config_servers, cx);
@@ -2016,13 +2028,18 @@ impl RemoteServerProjects {
                 window: &mut Window,
                 cx: &mut App,
             ) {
-                let prompt_message = format!("Remove WSL distro `{}`?", distro_name);
+                let prompt_message = i18n::tr_format(
+                    "Remove WSL distro `{name}`?",
+                    &[("name", &distro_name)],
+                );
+                let yes = i18n::tr("Yes, remove it");
+                let no = i18n::tr("No, keep it");
 
                 let confirmation = window.prompt(
                     PromptLevel::Warning,
                     &prompt_message,
                     None,
-                    &["Yes, remove it", "No, keep it"],
+                    &[yes.as_ref(), no.as_ref()],
                     cx,
                 );
 
@@ -2056,7 +2073,7 @@ impl RemoteServerProjects {
                         .inset(true)
                         .spacing(ui::ListItemSpacing::Sparse)
                         .start_slot(Icon::new(IconName::Trash).color(Color::Error))
-                        .child(Label::new("Remove Distro").color(Color::Error))
+                        .child(Label::new(i18n::tr("Remove Distro")).color(Color::Error))
                         .on_click(cx.listener(move |_, _, window, cx| {
                             remove_wsl_distro(cx.entity(), index, distro_name.clone(), window, cx);
                             cx.focus_self(window);
@@ -2078,9 +2095,9 @@ impl RemoteServerProjects {
         v_flex()
             .child({
                 let label = if connection.nickname.is_some() {
-                    "Edit Nickname"
+                    i18n::tr("Edit Nickname")
                 } else {
-                    "Add Nickname to Server"
+                    i18n::tr("Add Nickname to Server")
                 };
                 div()
                     .id("ssh-options-add-nickname")
@@ -2114,9 +2131,9 @@ impl RemoteServerProjects {
                     workspace
                         .update(cx, |this, cx| {
                             struct SshServerAddressCopiedToClipboard;
-                            let notification = format!(
-                                "Copied server address ({}) to clipboard",
-                                connection_string
+                            let notification = i18n::tr_format(
+                                "Copied server address ({address}) to clipboard",
+                                &[("address", &connection_string)],
                             );
 
                             this.show_toast(
@@ -2148,7 +2165,7 @@ impl RemoteServerProjects {
                             .inset(true)
                             .spacing(ui::ListItemSpacing::Sparse)
                             .start_slot(Icon::new(IconName::Copy).color(Color::Muted))
-                            .child(Label::new("Copy Server Address"))
+                            .child(Label::new(i18n::tr("Copy Server Address")))
                             .end_slot(Label::new(connection_string.clone()).color(Color::Muted))
                             .show_end_slot_on_hover()
                             .on_click({
@@ -2167,13 +2184,18 @@ impl RemoteServerProjects {
                     window: &mut Window,
                     cx: &mut App,
                 ) {
-                    let prompt_message = format!("Remove server `{}`?", connection_string);
+                    let prompt_message = i18n::tr_format(
+                        "Remove server `{server}`?",
+                        &[("server", &connection_string)],
+                    );
+                    let yes = i18n::tr("Yes, remove it");
+                    let no = i18n::tr("No, keep it");
 
                     let confirmation = window.prompt(
                         PromptLevel::Warning,
                         &prompt_message,
                         None,
-                        &["Yes, remove it", "No, keep it"],
+                        &[yes.as_ref(), no.as_ref()],
                         cx,
                     );
 
@@ -2213,7 +2235,7 @@ impl RemoteServerProjects {
                             .inset(true)
                             .spacing(ui::ListItemSpacing::Sparse)
                             .start_slot(Icon::new(IconName::Trash).color(Color::Error))
-                            .child(Label::new("Remove Server").color(Color::Error))
+                            .child(Label::new(i18n::tr("Remove Server")).color(Color::Error))
                             .on_click(cx.listener(move |_, _, window, cx| {
                                 remove_ssh_server(
                                     cx.entity(),

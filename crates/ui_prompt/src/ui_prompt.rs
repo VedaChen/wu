@@ -1,6 +1,6 @@
 use gpui::{
     App, Decorations, Entity, EventEmitter, FocusHandle, Focusable, PromptButton, PromptHandle,
-    PromptLevel, PromptResponse, RenderablePromptHandle, SharedString, TextStyleRefinement, Window,
+    PromptLevel, PromptResponse, RenderablePromptHandle, TextStyleRefinement, Window,
     div, prelude::*,
 };
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
@@ -40,13 +40,13 @@ fn zed_prompt_renderer(
     let renderer = cx.new({
         |cx| ZedPromptRenderer {
             _level: level,
-            message: cx.new(|cx| Markdown::new(SharedString::new(message), None, None, cx)),
+            message: cx.new(|cx| Markdown::new(i18n::tr(message), None, None, cx)),
             actions: actions.iter().map(|a| a.label().to_string()).collect(),
             focus: cx.focus_handle(),
             active_action_id: 0,
-            detail: detail
-                .filter(|text| !text.is_empty())
-                .map(|text| cx.new(|cx| Markdown::new(SharedString::new(text), None, None, cx))),
+            detail: detail.filter(|text| !text.is_empty()).map(|text| {
+                cx.new(|cx| Markdown::new(i18n::tr(text), None, None, cx))
+            }),
         }
     });
 
@@ -142,7 +142,7 @@ impl Render for ZedPromptRenderer {
                 v_flex()
                     .gap_1()
                     .children(self.actions.iter().enumerate().map(|(ix, action)| {
-                        Button::new(ix, action.clone())
+                        Button::new(ix, i18n::tr(action))
                             .full_width()
                             .style(ButtonStyle::Outlined)
                             .when(ix == self.active_action_id, |s| {

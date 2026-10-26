@@ -329,7 +329,7 @@ impl ChatView {
                         .min_w_0()
                         .text_size(px(QUEUE_TEXT_SIZE))
                         .text_color(colors.text_muted)
-                        .child("Editing in composer"),
+                        .child(i18n::tr("Editing in composer")),
                 )
                 .child(
                     h_flex()

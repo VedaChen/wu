@@ -164,8 +164,7 @@ impl Addon for CommitDiffAddon {
 
         menu.when_some(file_to_open, |menu, file| {
             let commit_view = self.commit_view.clone();
-            menu.entry(
-                "Open File in Project",
+            menu.entry(i18n::tr("Open File in Project"),
                 Some(Box::new(OpenFileAtHead)),
                 move |window, cx| {
                     commit_view
@@ -545,7 +544,7 @@ impl CommitView {
             .justify_center()
             .gap_2()
             .child(
-                Label::new("This commit is at the boundary of a shallow clone.")
+                Label::new(i18n::tr("This commit is at the boundary of a shallow clone."))
                     .color(Color::Muted),
             )
             .child(
@@ -813,7 +812,7 @@ impl CommitView {
                                                     .size(LabelSize::Small),
                                             )
                                             .child(
-                                                Label::new("•")
+                                                Label::new(i18n::tr("•"))
                                                     .size(LabelSize::Small)
                                                     .color(Color::Muted)
                                                     .alpha(0.5),
@@ -828,7 +827,7 @@ impl CommitView {
                     )
                     .when(self.stash.is_none(), |this| {
                         this.child(
-                            Button::new("sha", "Commit SHA")
+                            Button::new("sha", i18n::tr("Commit SHA"))
                                 .start_icon(
                                     Icon::new(copy_icon)
                                         .size(IconSize::Small)
@@ -1469,7 +1468,7 @@ impl Render for CommitViewToolbar {
                 this.child(
                     IconButton::new("show-in-git-graph", IconName::GitGraph)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Show in Git Graph"))
+                        .tooltip(Tooltip::text(i18n::tr("Show in Git Graph")))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::git_graph::OpenAtCommit {

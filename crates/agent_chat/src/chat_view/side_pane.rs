@@ -284,7 +284,7 @@ impl ChatView {
             .child(
                 IconButton::new("agent-side-pane-open-in-tab", IconName::Maximize)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Open in Tab"))
+                    .tooltip(Tooltip::text(i18n::tr("Open in Tab")))
                     .on_click(
                         cx.listener(|this, _, window, cx| this.move_side_pane_to_tab(window, cx)),
                     ),
@@ -292,7 +292,7 @@ impl ChatView {
             .child(
                 IconButton::new("agent-side-pane-close", IconName::Close)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Close"))
+                    .tooltip(Tooltip::text(i18n::tr("Close")))
                     .on_click(cx.listener(|this, _, window, cx| this.close_side_pane(window, cx))),
             );
         let pane = div()

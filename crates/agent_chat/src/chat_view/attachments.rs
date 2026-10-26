@@ -350,7 +350,7 @@ impl ChatView {
                                         .shadow_sm()
                                         .cursor_pointer()
                                         .visible_on_hover(group)
-                                        .tooltip(Tooltip::text("Remove"))
+                                        .tooltip(Tooltip::text(i18n::tr("Remove")))
                                         .child(icon(
                                             IconName::AgentClose,
                                             px(CLOSE_GLYPH),
@@ -371,7 +371,7 @@ impl ChatView {
                         div()
                             .text_size(ui(12.))
                             .text_color(colors.text_muted)
-                            .child("Preparing image…"),
+                            .child(i18n::tr("Preparing image…")),
                     )
                 })
                 .when_some(self.attachment_error.clone(), |this, error| {

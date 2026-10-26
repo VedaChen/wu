@@ -372,11 +372,31 @@ fn general_page(cx: &App) -> SettingsPage {
         ]
     }
 
+    fn language_section() -> [SettingsPageItem; 2] {
+        [
+            SettingsPageItem::SectionHeader("Language"),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Display Language",
+                description: "The language used for the Wu interface. Changes apply immediately.",
+                field: Box::new(SettingField {
+                    json_path: Some("ui_language"),
+                    pick: |settings_content| settings_content.ui_language.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.ui_language = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+        ]
+    }
+
     SettingsPage {
         title: "General",
         items: concat_sections!(
             @vec,
             general_settings_section(cx),
+            language_section(),
             security_section(),
             workspace_restoration_section(),
             scoped_settings_section(),

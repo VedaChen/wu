@@ -214,7 +214,7 @@ impl Render for FileInfoModal {
         let mut section = Section::new();
         match &self.state {
             State::Loading => {
-                section = section.child(Label::new("Loading…").color(Color::Muted));
+                section = section.child(Label::new(i18n::tr("Loading…")).color(Color::Muted));
             }
             State::Failed(error) => {
                 section = section.child(Label::new(error.clone()).color(Color::Error));
@@ -258,7 +258,7 @@ impl Render for FileInfoModal {
                     .section(section)
                     .footer(
                         ModalFooter::new().end_slot(
-                            Button::new("copy-path", "Copy Path")
+                            Button::new("copy-path", i18n::tr("Copy Path"))
                                 .style(ButtonStyle::Filled)
                                 .layer(ElevationIndex::ModalSurface)
                                 .on_click(

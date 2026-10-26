@@ -202,27 +202,27 @@ impl Component for CircularProgress {
                 .child(
                     container()
                         .child(CircularProgress::new(0.0, max_value, px(48.0), cx))
-                        .child(Label::new("0%").size(LabelSize::Small)),
+                        .child(Label::new(i18n::tr("0%")).size(LabelSize::Small)),
                 )
                 .child(
                     container()
                         .child(CircularProgress::new(25.0, max_value, px(48.0), cx))
-                        .child(Label::new("25%").size(LabelSize::Small)),
+                        .child(Label::new(i18n::tr("25%")).size(LabelSize::Small)),
                 )
                 .child(
                     container()
                         .child(CircularProgress::new(50.0, max_value, px(48.0), cx))
-                        .child(Label::new("50%").size(LabelSize::Small)),
+                        .child(Label::new(i18n::tr("50%")).size(LabelSize::Small)),
                 )
                 .child(
                     container()
                         .child(CircularProgress::new(75.0, max_value, px(48.0), cx))
-                        .child(Label::new("75%").size(LabelSize::Small)),
+                        .child(Label::new(i18n::tr("75%")).size(LabelSize::Small)),
                 )
                 .child(
                     container()
                         .child(CircularProgress::new(100.0, max_value, px(48.0), cx))
-                        .child(Label::new("100%").size(LabelSize::Small)),
+                        .child(Label::new(i18n::tr("100%")).size(LabelSize::Small)),
                 )
                 .into_any_element(),
         )])

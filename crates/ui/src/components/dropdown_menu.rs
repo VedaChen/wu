@@ -329,34 +329,34 @@ impl Component for DropdownMenu {
 
     fn preview(window: &mut Window, cx: &mut App) -> AnyElement {
         let menu = ContextMenu::build(window, cx, |this, _, _| {
-            this.entry("Option 1", None, |_, _| {})
-                .entry("Option 2", None, |_, _| {})
-                .entry("Option 3", None, |_, _| {})
+            this.entry(i18n::tr("Option 1"), None, |_, _| {})
+                .entry(i18n::tr("Option 2"), None, |_, _| {})
+                .entry(i18n::tr("Option 3"), None, |_, _| {})
                 .separator()
-                .entry("Option 4", None, |_, _| {})
+                .entry(i18n::tr("Option 4"), None, |_, _| {})
         });
 
         let menu_with_submenu = ContextMenu::build(window, cx, |this, _, _| {
-            this.entry("Toggle All Docks", None, |_, _| {})
+            this.entry(i18n::tr("Toggle All Docks"), None, |_, _| {})
                 .submenu("Editor Layout", |menu, _, _| {
-                    menu.entry("Split Up", None, |_, _| {})
-                        .entry("Split Down", None, |_, _| {})
+                    menu.entry(i18n::tr("Split Up"), None, |_, _| {})
+                        .entry(i18n::tr("Split Down"), None, |_, _| {})
                         .separator()
-                        .entry("Split Side", None, |_, _| {})
+                        .entry(i18n::tr("Split Side"), None, |_, _| {})
                 })
                 .separator()
-                .entry("Project Panel", None, |_, _| {})
-                .entry("Outline Panel", None, |_, _| {})
+                .entry(i18n::tr("Project Panel"), None, |_, _| {})
+                .entry(i18n::tr("Outline Panel"), None, |_, _| {})
                 .separator()
                 .submenu("Autofill", |menu, _, _| {
-                    menu.entry("Contact…", None, |_, _| {})
-                        .entry("Passwords…", None, |_, _| {})
+                    menu.entry(i18n::tr("Contact…"), None, |_, _| {})
+                        .entry(i18n::tr("Passwords…"), None, |_, _| {})
                 })
                 .submenu_with_icon("Predict", IconName::Sparkle, |menu, _, _| {
-                    menu.entry("Everywhere", None, |_, _| {})
-                        .entry("At Cursor", None, |_, _| {})
-                        .entry("Over Here", None, |_, _| {})
-                        .entry("Over There", None, |_, _| {})
+                    menu.entry(i18n::tr("Everywhere"), None, |_, _| {})
+                        .entry(i18n::tr("At Cursor"), None, |_, _| {})
+                        .entry(i18n::tr("Over Here"), None, |_, _| {})
+                        .entry(i18n::tr("Over There"), None, |_, _| {})
                 })
         });
 
@@ -368,12 +368,12 @@ impl Component for DropdownMenu {
                     vec![
                         single_example(
                             "Default",
-                            DropdownMenu::new("default", "Select an option", menu.clone())
+                            DropdownMenu::new("default", i18n::tr("Select an option"), menu.clone())
                                 .into_any_element(),
                         ),
                         single_example(
                             "Full Width",
-                            DropdownMenu::new("full-width", "Full Width Dropdown", menu.clone())
+                            DropdownMenu::new("full-width", i18n::tr("Full Width Dropdown"), menu.clone())
                                 .full_width(true)
                                 .into_any_element(),
                         ),
@@ -383,7 +383,7 @@ impl Component for DropdownMenu {
                     "Submenus",
                     vec![single_example(
                         "With Submenus",
-                        DropdownMenu::new("submenu", "Submenu", menu_with_submenu)
+                        DropdownMenu::new("submenu", i18n::tr("Submenu"), menu_with_submenu)
                             .into_any_element(),
                     )],
                 ),
@@ -392,13 +392,13 @@ impl Component for DropdownMenu {
                     vec![
                         single_example(
                             "Outlined",
-                            DropdownMenu::new("outlined", "Outlined Dropdown", menu.clone())
+                            DropdownMenu::new("outlined", i18n::tr("Outlined Dropdown"), menu.clone())
                                 .style(DropdownStyle::Outlined)
                                 .into_any_element(),
                         ),
                         single_example(
                             "Ghost",
-                            DropdownMenu::new("ghost", "Ghost Dropdown", menu.clone())
+                            DropdownMenu::new("ghost", i18n::tr("Ghost Dropdown"), menu.clone())
                                 .style(DropdownStyle::Ghost)
                                 .into_any_element(),
                         ),
@@ -408,7 +408,7 @@ impl Component for DropdownMenu {
                     "States",
                     vec![single_example(
                         "Disabled",
-                        DropdownMenu::new("disabled", "Disabled Dropdown", menu)
+                        DropdownMenu::new("disabled", i18n::tr("Disabled Dropdown"), menu)
                             .disabled(true)
                             .into_any_element(),
                     )],

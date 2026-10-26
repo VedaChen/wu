@@ -289,8 +289,7 @@ impl CommitModal {
                                 el.context(keybinding_target)
                             })
                             .when(has_previous_commit, |this| {
-                                this.toggleable_entry(
-                                    "Amend",
+                                this.toggleable_entry(i18n::tr("Amend"),
                                     amend_enabled,
                                     IconPosition::Start,
                                     Some(Box::new(Amend)),
@@ -306,8 +305,7 @@ impl CommitModal {
                                     },
                                 )
                             })
-                            .toggleable_entry(
-                                "Signoff",
+                            .toggleable_entry(i18n::tr("Signoff"),
                                 signoff_enabled,
                                 IconPosition::Start,
                                 Some(Box::new(Signoff)),
@@ -328,7 +326,7 @@ impl CommitModal {
                                         window.dispatch_action(Box::new(SkipHooks), cx)
                                     })
                                     .documentation_aside(DocumentationSide::Left, |_| {
-                                        Label::new("git commit --no-verify").into_any_element()
+                                        Label::new(i18n::tr("git commit --no-verify")).into_any_element()
                                     }),
                             )
                     }))

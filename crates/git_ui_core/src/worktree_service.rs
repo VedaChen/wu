@@ -252,14 +252,17 @@ impl Render for WorktreeFetchFailedToast {
                     .size(IconSize::Small)
                     .color(Color::Error),
             )
-            .child(Label::new(format!(
-                "git fetch failed for {}",
-                self.remote_branch_name
+            .child(Label::new(i18n::tr_format(
+                "git fetch failed for {branch}",
+                &[("branch", &self.remote_branch_name)],
             )))
             .child(
                 Button::new(
                     "use-local-worktree-base",
-                    format!("Use local {}", self.remote_branch_name),
+                    i18n::tr_format(
+                        "Use local {branch}",
+                        &[("branch", &self.remote_branch_name)],
+                    ),
                 )
                 .color(Color::Muted)
                 .on_click(cx.listener(move |_, _event, window, cx| {
@@ -285,7 +288,7 @@ impl Render for WorktreeFetchFailedToast {
                 })),
             )
             .child(
-                Button::new("view-worktree-fetch-log", "Show Error Logs")
+                Button::new("view-worktree-fetch-log", i18n::tr("Show Error Logs"))
                     .color(Color::Muted)
                     .on_click(cx.listener(move |_, _event, window, cx| {
                         cx.emit(DismissEvent);
@@ -618,10 +621,13 @@ pub async fn await_and_rollback_on_failure(
             }
         }
     }
-    let mut error_message = format!("Failed to create worktree: {err}");
+    let mut error_message =
+        i18n::tr_format("Failed to create worktree: {error}", &[("error", &err.to_string())]);
     if !rollback_failures.is_empty() {
-        error_message.push_str("\n\nFailed to clean up: ");
-        error_message.push_str(&rollback_failures.join(", "));
+        error_message.push_str(&i18n::tr_format(
+            "\n\nFailed to clean up: {errors}",
+            &[("errors", &rollback_failures.join(", "))],
+        ));
     }
     Err(anyhow!(error_message))
 }

@@ -194,6 +194,33 @@ pub enum ReduceMotionMode {
     Off,
 }
 
+/// The language used for Wu's user interface.
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    JsonSchema,
+    MergeFrom,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+pub enum UiLanguage {
+    /// English
+    #[default]
+    #[serde(rename = "en")]
+    #[strum(serialize = "English")]
+    En,
+    /// Simplified Chinese
+    #[serde(rename = "zh-CN")]
+    #[strum(serialize = "简体中文")]
+    ZhCn,
+}
+
 #[with_fallible_options]
 #[derive(Debug, PartialEq, Default, Clone, Serialize, JsonSchema, MergeFrom)]
 pub struct SettingsContent {
@@ -236,6 +263,11 @@ pub struct SettingsContent {
     ///
     /// Default: true
     pub auto_update: Option<bool>,
+
+    /// The language used for Wu's user interface.
+    ///
+    /// Default: en
+    pub ui_language: Option<UiLanguage>,
 
     /// This base keymap settings adjusts the default keybindings in Wu to be similar
     /// to other common code editors. By default, Wu's keymap closely follows VSCode's
@@ -364,6 +396,7 @@ fallible_options::flattened_deserialize!(SettingsContent {
         node, proxy, reduce_motion, server_url, credentials_url, session, terminal,
         title_bar, modeline_lines,
         instrumentation,
+        ui_language,
     },
     defaults: {},
 });

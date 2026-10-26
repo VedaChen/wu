@@ -413,7 +413,7 @@ impl AgentPanel {
                 }
             };
             let menu = menu
-                .entry("Rename", None, {
+                .entry(i18n::tr("Rename"), None, {
                     let (id, title) = (id.clone(), title.clone());
                     action(
                         &panel,
@@ -439,7 +439,7 @@ impl AgentPanel {
                     )
                 })
                 .separator()
-                .entry("Fork Chat", None, {
+                .entry(i18n::tr("Fork Chat"), None, {
                     let id = id.clone();
                     action(
                         &panel,
@@ -447,12 +447,12 @@ impl AgentPanel {
                     )
                 });
             let menu = match native_id.clone() {
-                Some(native_id) => menu.entry("Copy Agent Session ID", None, move |_, cx| {
+                Some(native_id) => menu.entry(i18n::tr("Copy Agent Session ID"), None, move |_, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(native_id.clone()))
                 }),
                 None => menu,
             };
-            menu.separator().entry("Delete…", None, {
+            menu.separator().entry(i18n::tr("Delete…"), None, {
                 let (id, title) = (id.clone(), title.clone());
                 action(
                     &panel,
@@ -502,8 +502,7 @@ impl AgentPanel {
                             },
                         )
                     });
-                    menu.separator().entry(
-                        "Continue Saved Chat…",
+                    menu.separator().entry(i18n::tr("Continue Saved Chat…"),
                         Some(ContinueSavedChat.boxed_clone()),
                         move |window, cx| {
                             workspace
@@ -633,7 +632,7 @@ impl AgentPanel {
                     .pb(px(SPACE_SM))
                     .text_size(ui(12.))
                     .text_color(text_faint(cx))
-                    .child("No chats in this project yet."),
+                    .child(i18n::tr("No chats in this project yet.")),
             )
             .child(
                 v_flex().gap(px(LIST_GAP)).children(

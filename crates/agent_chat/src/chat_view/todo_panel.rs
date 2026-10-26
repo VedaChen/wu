@@ -238,7 +238,7 @@ impl ChatView {
                         div()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(colors.text)
-                            .child("Todo"),
+                            .child(i18n::tr("Todo")),
                     )
                     .child(
                         div()

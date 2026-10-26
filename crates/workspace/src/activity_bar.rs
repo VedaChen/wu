@@ -396,23 +396,23 @@ impl ActivityBar {
                     .height(button_height(window, cx).into())
                     .icon_size(IconSize::Custom(icon_rems(window, cx)))
                     .tab_index(0isize)
-                    .aria_label("Manage"),
-                Tooltip::text("Manage"),
+                    .aria_label(i18n::tr("Manage")),
+                Tooltip::text(i18n::tr("Manage")),
             )
             .menu(|window, cx| {
                 ContextMenu::build(window, cx, |menu, _, _| {
-                    menu.action("Settings", wu_actions::OpenSettings.boxed_clone())
-                        .action("Keymap", Box::new(wu_actions::OpenKeymap))
+                    menu.action(i18n::tr("Settings"), wu_actions::OpenSettings.boxed_clone())
+                        .action(i18n::tr("Keymap"), Box::new(wu_actions::OpenKeymap))
                         .action(
-                            "Themes…",
+                            i18n::tr("Themes…"),
                             wu_actions::theme_selector::Toggle::default().boxed_clone(),
                         )
                         .action(
-                            "Icon Themes…",
+                            i18n::tr("Icon Themes…"),
                             wu_actions::icon_theme_selector::Toggle::default().boxed_clone(),
                         )
                         .action(
-                            "Extensions",
+                            i18n::tr("Extensions"),
                             wu_actions::Extensions::default().boxed_clone(),
                         )
                 })

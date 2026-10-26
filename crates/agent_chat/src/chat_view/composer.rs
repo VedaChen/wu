@@ -547,7 +547,7 @@ impl ChatView {
             .text_size(ui(11.))
             .when(failed, |this| {
                 this.text_color(cx.theme().status().error)
-                    .child("Run failed")
+                    .child(i18n::tr("Run failed"))
             })
     }
 
@@ -576,8 +576,8 @@ impl ChatView {
                     .cursor_pointer()
                     .text_size(ui(13.))
                     .hover(move |style| style.bg(hover_background).border_color(hover_border))
-                    .child(div().text_color(colors.text_muted).child("↓"))
-                    .child(div().text_color(colors.text).child("Scroll to bottom"))
+                    .child(div().text_color(colors.text_muted).child(i18n::tr("↓")))
+                    .child(div().text_color(colors.text).child(i18n::tr("Scroll to bottom")))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_scroll_button = false;
                         this.list.set_follow_mode(gpui::FollowMode::Tail);
@@ -919,7 +919,7 @@ impl ChatView {
                                 .mt(px(4.))
                                 .text_size(ui(12.))
                                 .text_color(colors.text_muted.opacity(0.65))
-                                .child("Select one or more options."),
+                                .child(i18n::tr("Select one or more options.")),
                         )
                     })
                     .child(
@@ -961,7 +961,7 @@ impl ChatView {
                             .text_size(ui(13.))
                             .text_color(colors.text_muted)
                             .hover(move |style| style.bg(back_hover).text_color(colors.text))
-                            .child("Back")
+                            .child(i18n::tr("Back"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.question_pages
                                     .insert(pending_id.to_string(), page_index - 1);

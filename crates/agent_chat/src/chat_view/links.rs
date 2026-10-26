@@ -288,30 +288,30 @@ impl ChatView {
                 let open_target = target.clone();
                 let tab_view = view.clone();
                 let tab_target = target;
-                menu.entry("Open", None, move |window, cx| {
+                menu.entry(i18n::tr("Open"), None, move |window, cx| {
                     open_view
                         .update(cx, |this, cx| {
                             this.open_file(open_target.clone(), window, cx)
                         })
                         .log_err();
                 })
-                .entry("Open in Tab", None, move |window, cx| {
+                .entry(i18n::tr("Open in Tab"), None, move |window, cx| {
                     tab_view
                         .update(cx, |this, cx| {
                             this.open_file_in_tab(tab_target.clone(), window, cx)
                         })
                         .log_err();
                 })
-                .entry("Open with Default App", None, {
+                .entry(i18n::tr("Open with Default App"), None, {
                     let path = path.clone();
                     move |_, cx| cx.open_with_system(&path)
                 })
-                .entry("Show in Folder", None, {
+                .entry(i18n::tr("Show in Folder"), None, {
                     let path = path.clone();
                     move |_, cx| cx.reveal_path(&path)
                 })
                 .separator()
-                .entry("Copy Path", None, move |_, cx| {
+                .entry(i18n::tr("Copy Path"), None, move |_, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(
                         path.to_string_lossy().into_owned(),
                     ))
@@ -320,8 +320,8 @@ impl ChatView {
             None => {
                 let open_url = url.clone();
                 let copy_url = url.clone();
-                menu.entry("Open Link", None, move |_, cx| cx.open_url(&open_url))
-                    .entry("Copy Link", None, move |_, cx| {
+                menu.entry(i18n::tr("Open Link"), None, move |_, cx| cx.open_url(&open_url))
+                    .entry(i18n::tr("Copy Link"), None, move |_, cx| {
                         cx.write_to_clipboard(ClipboardItem::new_string(copy_url.to_string()))
                     })
             }

@@ -1089,7 +1089,7 @@ impl Render for LspLogToolbarItemView {
                                         .trigger(
                                             Button::new(
                                                 "language_server_trace_level_selector",
-                                                "Trace level",
+                                                i18n::tr("Trace level"),
                                             )
                                             .end_icon(
                                                 Icon::new(IconName::ChevronDown)
@@ -1159,7 +1159,7 @@ impl Render for LspLogToolbarItemView {
                                         .trigger(
                                             Button::new(
                                                 "language_server_log_level_selector",
-                                                "Log level",
+                                                i18n::tr("Log level"),
                                             )
                                             .end_icon(
                                                 Icon::new(IconName::ChevronDown)
@@ -1227,7 +1227,7 @@ impl Render for LspLogToolbarItemView {
                     ),
             )
             .child(
-                Button::new("clear_log_button", "Clear").on_click(cx.listener(
+                Button::new("clear_log_button", i18n::tr("Clear")).on_click(cx.listener(
                     |this, _, window, cx| {
                         if let Some(log_view) = this.log_view.as_ref() {
                             log_view.update(cx, |log_view, cx| {

@@ -48,7 +48,7 @@ pub(crate) fn settings_popover_menu(
             IconButton::new("table-settings-trigger", IconName::Filter)
                 .icon_size(IconSize::Small)
                 .size(ButtonSize::Compact),
-            Tooltip::text("Table Settings"),
+            Tooltip::text(i18n::tr("Table Settings")),
         )
         .anchor(Anchor::TopRight)
         .menu(move |window, cx| {
@@ -60,7 +60,7 @@ pub(crate) fn settings_popover_menu(
                     let settings = view_entity.read(cx).settings.clone();
 
                     let menu = toggle_entry(
-                        menu.header("Text Alignment"),
+                        menu.header(i18n::tr("Text Alignment")),
                         "Top",
                         Some("Choose vertical text alignment within cells"),
                         matches!(settings.vertical_alignment, VerticalAlignment::Top),
@@ -76,7 +76,7 @@ pub(crate) fn settings_popover_menu(
                         |settings| settings.vertical_alignment = VerticalAlignment::Center,
                     );
 
-                    let menu = menu.separator().header("Filter Sort");
+                    let menu = menu.separator().header(i18n::tr("Filter Sort"));
                     let menu = toggle_entry(
                         menu,
                         "A-Z, then Count",
@@ -123,7 +123,7 @@ fn append_dev_only_entries(
 ) -> ContextMenu {
     use crate::settings::RowRenderMechanism;
 
-    let menu = menu.separator().header("Dev-only: Rendering Mode");
+    let menu = menu.separator().header(i18n::tr("Dev-only: Rendering Mode"));
     let menu = toggle_entry(
         menu,
         "Variable Height",

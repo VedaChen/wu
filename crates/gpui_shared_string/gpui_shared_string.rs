@@ -191,6 +191,13 @@ impl From<SharedString> for String {
     }
 }
 
+impl From<SharedString> for Cow<'static, str> {
+    #[inline(always)]
+    fn from(text: SharedString) -> Self {
+        Cow::Owned(text.0.into())
+    }
+}
+
 impl Serialize for SharedString {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

@@ -1,0 +1,815 @@
+#!/usr/bin/env python3
+"""
+Maintain the English-to-Simplified-Chinese localization catalogs.
+
+The Rust UI uses i18n::tr, i18n::tr_ctx, i18n::tr_format and the corresponding
+tr!, tr_ctx!, tr_format! macros. This tool extracts those source strings,
+compares them with assets/locales/zh-CN/*.json, validates the catalogs, and can
+add or update entries.
+
+Examples:
+  python script/localization
+  python script/localization extract --output terms.txt
+  python script/localization check
+  python script/localization check --json
+  python script/localization stats
+  python script/localization format
+  python script/localization format --write
+  python script/localization add "Open File" "打开文件" --catalog common.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+SOURCE_ROOT = REPO_ROOT / "crates"
+CATALOG_DIR = REPO_ROOT / "assets" / "locales" / "zh-CN"
+
+TRANSLATION_NAMES = {"tr", "tr_ctx", "tr_format"}
+
+
+class LocalizationError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class Token:
+    kind: str
+    value: str
+    offset: int
+
+
+@dataclass
+class Catalog:
+    path: Path
+    entries: Dict[str, str] = field(default_factory=dict)
+    duplicate_keys: List[str] = field(default_factory=list)
+    error: Optional[str] = None
+
+
+def configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
+def is_ident_start(character: str) -> bool:
+    return character == "_" or character.isalpha()
+
+
+def is_ident_continue(character: str) -> bool:
+    return character == "_" or character.isalnum()
+
+
+def skip_block_comment(source: str, index: int) -> int:
+    depth = 1
+    length = len(source)
+    while index < length:
+        if source.startswith("/*", index):
+            depth += 1
+            index += 2
+        elif source.startswith("*/", index):
+            depth -= 1
+            index += 2
+            if depth == 0:
+                return index
+        else:
+            index += 1
+    raise LocalizationError("unterminated block comment")
+
+
+def decode_escape(source: str, index: int) -> Tuple[str, int]:
+    """Decode a Rust escape sequence. `index` points at the backslash."""
+    length = len(source)
+    if index + 1 >= length:
+        raise LocalizationError(f"unterminated escape at offset {index}")
+
+    escaped = source[index + 1]
+    simple = {
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        "0": "\0",
+        "\\": "\\",
+        '"': '"',
+        "'": "'",
+    }
+    if escaped in simple:
+        return simple[escaped], index + 2
+
+    if escaped == "\n":
+        return "", index + 2
+
+    if escaped == "\r":
+        next_index = index + 2
+        if next_index < length and source[next_index] == "\n":
+            next_index += 1
+        return "", next_index
+
+    if escaped == "x":
+        digits = source[index + 2 : index + 4]
+        if len(digits) != 2 or any(character not in "0123456789abcdefABCDEF" for character in digits):
+            raise LocalizationError(f"invalid \\x escape at offset {index}")
+        return chr(int(digits, 16)), index + 4
+
+    if escaped == "u":
+        if index + 2 >= length or source[index + 2] != "{":
+            raise LocalizationError(f"invalid \\u escape at offset {index}")
+        closing = source.find("}", index + 3)
+        if closing == -1:
+            raise LocalizationError(f"unterminated \\u escape at offset {index}")
+        digits = source[index + 3 : closing]
+        if not digits or any(character not in "0123456789abcdefABCDEF" for character in digits):
+            raise LocalizationError(f"invalid \\u escape at offset {index}")
+        try:
+            return chr(int(digits, 16)), closing + 1
+        except ValueError as error:
+            raise LocalizationError(f"invalid unicode escape at offset {index}") from error
+
+    return escaped, index + 2
+
+
+def parse_quoted_string(source: str, quote_index: int) -> Tuple[str, int]:
+    length = len(source)
+    index = quote_index + 1
+    characters: List[str] = []
+    while index < length:
+        character = source[index]
+        if character == '"':
+            return "".join(characters), index + 1
+        if character == "\\":
+            decoded, index = decode_escape(source, index)
+            characters.append(decoded)
+        else:
+            characters.append(character)
+            index += 1
+    raise LocalizationError(f"unterminated string literal at offset {quote_index}")
+
+
+def parse_raw_string(source: str, raw_index: int) -> Optional[Tuple[str, int]]:
+    length = len(source)
+    index = raw_index + 1
+    hashes = 0
+    while index < length and source[index] == "#":
+        hashes += 1
+        index += 1
+
+    if index >= length or source[index] != '"':
+        return None
+
+    content_start = index + 1
+    closing = '"' + "#" * hashes
+    closing_index = source.find(closing, content_start)
+    if closing_index == -1:
+        raise LocalizationError(f"unterminated raw string literal at offset {raw_index}")
+    return source[content_start:closing_index], closing_index + len(closing)
+
+
+def try_parse_string(source: str, index: int) -> Optional[Tuple[str, int]]:
+    length = len(source)
+    if index >= length:
+        return None
+
+    character = source[index]
+    if character == '"':
+        return parse_quoted_string(source, index)
+
+    if character == "r":
+        return parse_raw_string(source, index)
+
+    if character in ("b", "c"):
+        if index + 1 < length and source[index + 1] == "r":
+            parsed = parse_raw_string(source, index + 1)
+            if parsed is not None:
+                return parsed
+        if index + 1 < length and source[index + 1] == '"':
+            return parse_quoted_string(source, index + 1)
+
+    return None
+
+
+def skip_char_literal(source: str, index: int) -> Optional[int]:
+    length = len(source)
+    next_index = index + 1
+    if next_index >= length:
+        return None
+
+    if source[next_index] == "\\":
+        next_index += 1
+        if next_index >= length:
+            return None
+        escaped = source[next_index]
+        if escaped == "x":
+            next_index += 3
+        elif escaped == "u":
+            closing = source.find("}", next_index + 2)
+            if closing == -1:
+                return None
+            next_index = closing + 1
+        else:
+            next_index += 1
+        if next_index < length and source[next_index] == "'":
+            return next_index + 1
+        return None
+
+    if source[next_index] in "\r\n":
+        return None
+
+    next_index += 1
+    if next_index < length and source[next_index] == "'":
+        return next_index + 1
+    return None
+
+
+def tokenize(source: str) -> List[Token]:
+    tokens: List[Token] = []
+    length = len(source)
+    index = 0
+
+    while index < length:
+        character = source[index]
+
+        if character.isspace():
+            index += 1
+            continue
+
+        if character == "/" and index + 1 < length:
+            if source[index + 1] == "/":
+                newline = source.find("\n", index + 2)
+                index = length if newline == -1 else newline + 1
+                continue
+            if source[index + 1] == "*":
+                index = skip_block_comment(source, index + 2)
+                continue
+
+        parsed_string = try_parse_string(source, index)
+        if parsed_string is not None:
+            value, index = parsed_string
+            tokens.append(Token("string", value, index))
+            continue
+
+        if character == "'":
+            end = skip_char_literal(source, index)
+            if end is not None:
+                tokens.append(Token("char", "", index))
+                index = end
+                continue
+            tokens.append(Token("punct", character, index))
+            index += 1
+            continue
+
+        if character == "r" and index + 1 < length and source[index + 1] == "#":
+            raw_ident_start = index + 2
+            if raw_ident_start < length and is_ident_start(source[raw_ident_start]):
+                raw_ident_end = raw_ident_start + 1
+                while raw_ident_end < length and is_ident_continue(source[raw_ident_end]):
+                    raw_ident_end += 1
+                tokens.append(Token("ident", source[raw_ident_start:raw_ident_end], index))
+                index = raw_ident_end
+                continue
+
+        if is_ident_start(character):
+            end = index + 1
+            while end < length and is_ident_continue(source[end]):
+                end += 1
+            tokens.append(Token("ident", source[index:end], index))
+            index = end
+            continue
+
+        tokens.append(Token("punct", character, index))
+        index += 1
+
+    return tokens
+
+
+def string_argument(tokens: Sequence[Token], opening_index: int) -> Optional[str]:
+    argument_index = opening_index + 1
+    if argument_index >= len(tokens) or tokens[argument_index].kind != "string":
+        return None
+    return tokens[argument_index].value
+
+
+def context_arguments(tokens: Sequence[Token], opening_index: int) -> Optional[Tuple[str, str]]:
+    context_index = opening_index + 1
+    if context_index >= len(tokens) or tokens[context_index].kind != "string":
+        return None
+
+    comma_index = context_index + 1
+    if comma_index >= len(tokens) or tokens[comma_index].value != ",":
+        return None
+
+    source_index = comma_index + 1
+    if source_index >= len(tokens) or tokens[source_index].kind != "string":
+        return None
+
+    return tokens[context_index].value, tokens[source_index].value
+
+
+def extract_terms(source_root: Path) -> Dict[str, Set[str]]:
+    """Return source text -> contexts used with tr_ctx."""
+    if not source_root.is_dir():
+        raise LocalizationError(f"source directory does not exist: {source_root}")
+
+    terms: Dict[str, Set[str]] = {}
+    paths = sorted(source_root.rglob("*.rs"), key=lambda path: path.as_posix().lower())
+
+    for path in paths:
+        try:
+            source = path.read_text(encoding="utf-8-sig")
+        except OSError as error:
+            print(f"warning: could not read {path}: {error}", file=sys.stderr)
+            continue
+        except UnicodeDecodeError as error:
+            print(f"warning: could not decode {path} as UTF-8: {error}", file=sys.stderr)
+            continue
+
+        try:
+            tokens = tokenize(source)
+        except LocalizationError as error:
+            print(f"warning: skipping {path}: {error}", file=sys.stderr)
+            continue
+
+        for index, token in enumerate(tokens):
+            if token.kind != "ident" or token.value not in TRANSLATION_NAMES:
+                continue
+
+            if index > 0:
+                previous = tokens[index - 1]
+                if previous.value in (".", "fn"):
+                    continue
+                if (
+                    index >= 2
+                    and previous.value == "!"
+                    and tokens[index - 2].value == "macro_rules"
+                ):
+                    continue
+
+            name = token.value
+            next_index = index + 1
+            if next_index < len(tokens) and tokens[next_index].value == "!":
+                next_index += 1
+
+            if next_index >= len(tokens) or tokens[next_index].value not in "([{":
+                continue
+
+            if name == "tr_ctx":
+                arguments = context_arguments(tokens, next_index)
+                if arguments is None:
+                    continue
+                context, source_text = arguments
+                if not source_text:
+                    continue
+                terms.setdefault(source_text, set()).add(context)
+            else:
+                source_text = string_argument(tokens, next_index)
+                if not source_text:
+                    continue
+                terms.setdefault(source_text, set())
+
+    return terms
+
+
+def load_catalog(path: Path) -> Catalog:
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError as error:
+        return Catalog(path=path, error=str(error))
+    except UnicodeDecodeError as error:
+        return Catalog(path=path, error=f"not valid UTF-8: {error}")
+
+    duplicate_keys: List[str] = []
+
+    def object_pairs_hook(pairs: List[Tuple[str, object]]) -> Dict[str, object]:
+        result: Dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                duplicate_keys.append(key)
+            result[key] = value
+        return result
+
+    try:
+        data = json.loads(text, object_pairs_hook=object_pairs_hook)
+    except json.JSONDecodeError as error:
+        return Catalog(path=path, error=f"invalid JSON: {error}")
+
+    if not isinstance(data, dict):
+        return Catalog(path=path, error="catalog must be a JSON object")
+
+    entries: Dict[str, str] = {}
+    for key, value in data.items():
+        if not isinstance(key, str):
+            return Catalog(path=path, error="catalog keys must be strings")
+        if not isinstance(value, str):
+            return Catalog(path=path, error=f"value for {key!r} must be a string")
+
+        entries[key] = value
+
+    return Catalog(path=path, entries=entries, duplicate_keys=duplicate_keys)
+
+
+def load_catalogs(catalog_dir: Path = CATALOG_DIR) -> List[Catalog]:
+    if not catalog_dir.is_dir():
+        raise LocalizationError(f"catalog directory does not exist: {catalog_dir}")
+
+    paths = sorted(catalog_dir.glob("*.json"), key=lambda path: path.name.lower())
+    if not paths:
+        raise LocalizationError(f"no JSON catalogs found in {catalog_dir}")
+
+    return [load_catalog(path) for path in paths]
+
+
+def catalog_entries(catalogs: Iterable[Catalog]) -> Dict[str, str]:
+    entries: Dict[str, str] = {}
+    for catalog in catalogs:
+        entries.update(catalog.entries)
+    return entries
+
+
+def status(
+    terms: Dict[str, Set[str]], catalogs: Sequence[Catalog]
+) -> Tuple[List[str], List[str]]:
+    keys = set(catalog_entries(catalogs))
+    used: Set[str] = set()
+    missing: List[str] = []
+
+    for source_text, contexts in terms.items():
+        lookup_keys = {source_text}
+        for context in contexts:
+            lookup_keys.add(f"{context}/{source_text}")
+        used.update(lookup_keys)
+        if lookup_keys.isdisjoint(keys):
+            missing.append(source_text)
+
+    missing.sort()
+    unused = sorted(keys - used)
+    return missing, unused
+
+
+def display_text(value: str) -> str:
+    if (
+        value == ""
+        or value != value.strip()
+        or any(character in "\r\n\t" for character in value)
+    ):
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
+def write_catalog(path: Path, entries: Dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(path.name + ".tmp")
+    try:
+        with temporary_path.open("w", encoding="utf-8", newline="\n") as file:
+            json.dump(entries, file, ensure_ascii=False, indent=2, sort_keys=True)
+            file.write("\n")
+        os.replace(temporary_path, path)
+    except OSError:
+        try:
+            temporary_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def command_extract(args: argparse.Namespace) -> int:
+    terms = extract_terms(SOURCE_ROOT)
+    keys = sorted(terms)
+
+    if args.json:
+        output = json.dumps(keys, ensure_ascii=False, indent=2) + "\n"
+    else:
+        output = "".join(f"{source_text}\n" for source_text in keys)
+
+    if args.output:
+        output_path = Path(args.output)
+        with output_path.open("w", encoding="utf-8", newline="\n") as file:
+            file.write(output)
+        print(f"Wrote {len(keys)} terms to {output_path}", file=sys.stderr)
+    else:
+        sys.stdout.write(output)
+
+    return 0
+
+
+def command_check(args: argparse.Namespace) -> int:
+    terms = extract_terms(SOURCE_ROOT)
+    catalogs = load_catalogs()
+    catalog_errors = [catalog for catalog in catalogs if catalog.error is not None]
+
+    missing, unused = status(terms, catalogs)
+    translated = len(terms) - len(missing)
+    counts = {catalog.path.name: len(catalog.entries) for catalog in catalogs}
+
+    if args.json:
+        payload = {
+            "extracted": len(terms),
+            "translated": translated,
+            "missing": missing,
+            "unused": unused,
+            "catalogs": counts,
+            "errors": [
+                f"{catalog.path}: {catalog.error}" for catalog in catalog_errors
+            ],
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        for catalog in catalog_errors:
+            print(f"error: {catalog.path}: {catalog.error}", file=sys.stderr)
+
+        if missing:
+            print(f"Missing ({len(missing)}):")
+            for source_text in missing:
+                print(f"  {display_text(source_text)}")
+        else:
+            print("Missing (0): none")
+
+        if unused:
+            print(f"Unused ({len(unused)}):")
+            for key in unused:
+                print(f"  {display_text(key)}")
+        else:
+            print("Unused (0): none")
+
+        print(
+            f"Summary: {len(terms)} extracted, {translated} translated, "
+            f"{len(missing)} missing, {len(unused)} unused"
+        )
+
+    if catalog_errors:
+        return 2
+    return 1 if missing else 0
+
+
+def command_stats(args: argparse.Namespace) -> int:
+    terms = extract_terms(SOURCE_ROOT)
+    catalogs = load_catalogs()
+    catalog_errors = [catalog for catalog in catalogs if catalog.error is not None]
+    missing, unused = status(terms, catalogs)
+    translated = len(terms) - len(missing)
+
+    if args.json:
+        payload = {
+            "extracted": len(terms),
+            "translated": translated,
+            "missing": len(missing),
+            "unused": len(unused),
+            "catalogs": {
+                catalog.path.name: len(catalog.entries) for catalog in catalogs
+            },
+            "errors": [
+                f"{catalog.path}: {catalog.error}" for catalog in catalog_errors
+            ],
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"Repository: {REPO_ROOT}")
+        print(f"Catalog directory: {CATALOG_DIR}")
+        print(f"Extracted: {len(terms)}")
+        print(f"Translated: {translated}")
+        print(f"Missing: {len(missing)}")
+        print(f"Unused: {len(unused)}")
+        print("Catalogs:")
+        for catalog in catalogs:
+            if catalog.error is not None:
+                print(f"  {catalog.path.name}: ERROR: {catalog.error}")
+            else:
+                print(f"  {catalog.path.name}: {len(catalog.entries)} entries")
+        for catalog in catalog_errors:
+            print(f"error: {catalog.path}: {catalog.error}", file=sys.stderr)
+
+    return 2 if catalog_errors else 0
+
+
+def command_format(args: argparse.Namespace) -> int:
+    catalogs = load_catalogs()
+    catalog_errors = [catalog for catalog in catalogs if catalog.error is not None]
+    duplicate_within = [
+        catalog for catalog in catalogs if catalog.duplicate_keys
+    ]
+
+    occurrences: Dict[str, List[str]] = {}
+    for catalog in catalogs:
+        for key in catalog.entries:
+            occurrences.setdefault(key, []).append(catalog.path.name)
+    duplicate_across = {
+        key: names for key, names in occurrences.items() if len(names) > 1
+    }
+
+    wrote: List[Path] = []
+    write_blocked = bool(catalog_errors or duplicate_within)
+
+    if args.write and not write_blocked:
+        for catalog in catalogs:
+            write_catalog(catalog.path, catalog.entries)
+            wrote.append(catalog.path)
+
+    for catalog in catalogs:
+        if catalog.error is not None:
+            print(f"{catalog.path.name}: ERROR: {catalog.error}", file=sys.stderr)
+        else:
+            print(f"{catalog.path.name}: {len(catalog.entries)} entries")
+
+    if duplicate_within:
+        print("Duplicate keys within a catalog:", file=sys.stderr)
+        for catalog in duplicate_within:
+            for key in catalog.duplicate_keys:
+                print(f"  {catalog.path.name}: {display_text(key)}", file=sys.stderr)
+
+    if duplicate_across:
+        print("Duplicate keys across catalogs:", file=sys.stderr)
+        for key in sorted(duplicate_across):
+            names = ", ".join(sorted(duplicate_across[key]))
+            print(f"  {display_text(key)}: {names}", file=sys.stderr)
+
+    if args.write:
+        if write_blocked:
+            print(
+                "No catalogs were rewritten because validation failed or a file "
+                "contains duplicate keys.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Rewrote {len(wrote)} catalog file(s) sorted with 2-space indentation.")
+    elif not (catalog_errors or duplicate_within or duplicate_across):
+        print("Catalog format OK.")
+
+    return 1 if (catalog_errors or duplicate_within or duplicate_across) else 0
+
+
+def resolve_catalog_path(value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+
+    repository_candidate = REPO_ROOT / path
+    if repository_candidate.exists():
+        return repository_candidate
+
+    return CATALOG_DIR / path
+
+
+def command_add(args: argparse.Namespace) -> int:
+    catalog_path = resolve_catalog_path(args.catalog)
+
+    if catalog_path.exists():
+        catalog = load_catalog(catalog_path)
+        if catalog.error is not None:
+            raise LocalizationError(f"{catalog_path}: {catalog.error}")
+        if catalog.duplicate_keys:
+            raise LocalizationError(
+                f"{catalog_path} contains duplicate keys; run format first"
+            )
+        entries = dict(catalog.entries)
+        action = "Updated" if args.key in entries else "Added"
+    else:
+        entries = {}
+        action = "Added"
+
+    entries[args.key] = args.translation
+    write_catalog(catalog_path, entries)
+    print(f'{action} "{display_text(args.key)}" in {catalog_path}')
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="localization",
+        description=(
+            "Extract localization strings from crates/**/*.rs and maintain the "
+            "Simplified Chinese catalogs in assets/locales/zh-CN."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  python script/localization\n"
+            "  python script/localization extract --output terms.txt\n"
+            "  python script/localization check\n"
+            "  python script/localization check --json\n"
+            "  python script/localization stats\n"
+            "  python script/localization format\n"
+            "  python script/localization format --write\n"
+            '  python script/localization add "Open File" "打开文件" --catalog common.json'
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.set_defaults(command="extract", output=None, json=False)
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    extract_parser = subparsers.add_parser(
+        "extract",
+        help="Extract source strings (default command)",
+        description="Extract and print the sorted source strings used by i18n calls.",
+    )
+    extract_parser.add_argument(
+        "-o",
+        "--output",
+        metavar="FILE",
+        help="Write the sorted list to FILE instead of standard output.",
+    )
+    extract_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Write a JSON array instead of one string per line.",
+    )
+
+    check_parser = subparsers.add_parser(
+        "check",
+        help="Report missing and unused catalog entries",
+        description=(
+            "Compare extracted source strings with all catalog keys. Exits with "
+            "status 1 when entries are missing, and 0 otherwise."
+        ),
+    )
+    check_parser.add_argument(
+        "--json", action="store_true", help="Print a JSON report."
+    )
+
+    stats_parser = subparsers.add_parser(
+        "stats",
+        help="Show extraction and catalog statistics",
+        description="Show extracted, translated, missing, and unused counts.",
+    )
+    stats_parser.add_argument(
+        "--json", action="store_true", help="Print statistics as JSON."
+    )
+
+    format_parser = subparsers.add_parser(
+        "format",
+        help="Validate catalog JSON and optionally sort it",
+        description=(
+            "Validate every catalog JSON file and detect duplicate keys (within "
+            "and across files). With --write, rewrite valid catalogs sorted with "
+            "2-space indentation and UTF-8 encoding."
+        ),
+    )
+    format_parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Rewrite valid catalogs sorted with 2-space indentation.",
+    )
+
+    add_parser = subparsers.add_parser(
+        "add",
+        help="Add or update one catalog entry",
+        description="Add or update an English source string in a catalog file.",
+    )
+    add_parser.add_argument("key", help="English source string.")
+    add_parser.add_argument("translation", help="Simplified Chinese translation.")
+    add_parser.add_argument(
+        "--catalog",
+        default="common.json",
+        metavar="FILE",
+        help=(
+            "Catalog file to update. A relative path is tried from the repository "
+            "root first, then from assets/locales/zh-CN. Default: common.json."
+        ),
+    )
+
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    configure_stdio()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command is None:
+        args.command = "extract"
+
+    try:
+        if args.command == "extract":
+            return command_extract(args)
+        if args.command == "check":
+            return command_check(args)
+        if args.command == "stats":
+            return command_stats(args)
+        if args.command == "format":
+            return command_format(args)
+        if args.command == "add":
+            return command_add(args)
+    except LocalizationError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    except BrokenPipeError:
+        return 0
+    except KeyboardInterrupt:
+        return 130
+
+    parser.error(f"unknown command: {args.command}")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

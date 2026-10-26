@@ -500,7 +500,7 @@ impl PickerDelegate for ColumnFilterDelegate {
                         .id("table-filter-clear-all")
                         .cursor_pointer()
                         .child(
-                            Label::new("Clear all")
+                            Label::new(i18n::tr("Clear all"))
                                 .size(LabelSize::Small)
                                 .color(Color::Accent),
                         )

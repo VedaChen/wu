@@ -846,7 +846,7 @@ impl Render for HighlightsTreeView {
                             if self.editor.is_some() {
                                 let has_any = !self.cached_entries.is_empty();
                                 if has_any {
-                                    this.child(Label::new("All highlights are filtered out"))
+                                    this.child(Label::new(i18n::tr("All highlights are filtered out")))
                                         .child(
                                             Label::new(
                                                 "Enable text, syntax, or semantic highlights in the toolbar",
@@ -854,7 +854,7 @@ impl Render for HighlightsTreeView {
                                             .size(LabelSize::Small),
                                         )
                                 } else {
-                                    this.child(Label::new("No highlights found")).child(
+                                    this.child(Label::new(i18n::tr("No highlights found"))).child(
                                         Label::new(
                                             "The editor has no text, syntax, or semantic token highlights",
                                         )
@@ -862,8 +862,8 @@ impl Render for HighlightsTreeView {
                                     )
                                 }
                             } else {
-                                this.child(Label::new("Not attached to an editor")).child(
-                                    Label::new("Focus an editor to show highlights")
+                                this.child(Label::new(i18n::tr("Not attached to an editor"))).child(
+                                    Label::new(i18n::tr("Focus an editor to show highlights"))
                                         .size(LabelSize::Small),
                                 )
                             }
@@ -981,7 +981,7 @@ impl HighlightsTreeToolbarItemView {
                 IconButton::new("toggle-highlights-settings-icon", IconName::Filter)
                     .icon_size(IconSize::Small)
                     .toggle_state(self.toggle_settings_handle.is_deployed()),
-                Tooltip::text("Highlights Settings"),
+                Tooltip::text(i18n::tr("Highlights Settings")),
             )
             .anchor(gpui::Anchor::TopRight)
             .with_handle(self.toggle_settings_handle.clone())
@@ -991,8 +991,7 @@ impl HighlightsTreeToolbarItemView {
                 let tree_view_for_semantic = tree_view.clone();
 
                 let menu = ContextMenu::build(window, cx, move |menu, _, _| {
-                    menu.toggleable_entry(
-                        "Text Highlights",
+                    menu.toggleable_entry(i18n::tr("Text Highlights"),
                         show_text,
                         IconPosition::Start,
                         Some(ToggleTextHighlights.boxed_clone()),
@@ -1015,8 +1014,7 @@ impl HighlightsTreeToolbarItemView {
                             }
                         },
                     )
-                    .toggleable_entry(
-                        "Syntax Tokens",
+                    .toggleable_entry(i18n::tr("Syntax Tokens"),
                         show_syntax,
                         IconPosition::Start,
                         Some(ToggleSyntaxTokens.boxed_clone()),
@@ -1039,8 +1037,7 @@ impl HighlightsTreeToolbarItemView {
                             }
                         },
                     )
-                    .toggleable_entry(
-                        "Semantic Tokens",
+                    .toggleable_entry(i18n::tr("Semantic Tokens"),
                         show_semantic,
                         IconPosition::Start,
                         Some(ToggleSemanticTokens.boxed_clone()),

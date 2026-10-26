@@ -21,7 +21,7 @@ pub enum CalloutBorderPosition {
 ///     .icon(IconName::Warning)
 ///     .title("Be aware of your subscription!")
 ///     .description("Your subscription is about to expire. Renew now!")
-///     .actions_slot(Button::new("renew", "Renew Now"));
+///     .actions_slot(Button::new("renew", i18n::tr("Renew Now")));
 /// ```
 ///
 #[derive(IntoElement, RegisterComponent)]
@@ -232,12 +232,12 @@ impl Component for Callout {
     }
 
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        let single_action = || Button::new("got-it", "Got it").label_size(LabelSize::Small);
+        let single_action = || Button::new("got-it", i18n::tr("Got it")).label_size(LabelSize::Small);
         let multiple_actions = || {
             h_flex()
                 .gap_0p5()
-                .child(Button::new("update", "Backup & Update").label_size(LabelSize::Small))
-                .child(Button::new("dismiss", "Dismiss").label_size(LabelSize::Small))
+                .child(Button::new("update", i18n::tr("Backup & Update")).label_size(LabelSize::Small))
+                .child(Button::new("dismiss", i18n::tr("Dismiss")).label_size(LabelSize::Small))
         };
 
         let basic_examples = vec![

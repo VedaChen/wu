@@ -1,0 +1,11 @@
+{
+  "Copy as Markdown": "复制为 Markdown",
+  "Markdown Preview": "Markdown 预览",
+  "Preview {title}": "预览 {title}",
+  "Terminal": "终端",
+  "{delimiter}Command: {command}": "{delimiter}命令：{command}",
+  "{delimiter}Task `{label}` finished": "{delimiter}任务 `{label}` 已完成",
+  "{delimiter}Task `{label}` finished successfully": "{delimiter}任务 `{label}` 已成功完成",
+  "{delimiter}Task `{label}` finished with exit code: {code}": "{delimiter}任务 `{label}` 已完成，退出码：{code}",
+  "{delimiter}Task `{label}` terminated by signal: {signal}": "{delimiter}任务 `{label}` 被信号终止：{signal}"
+}

@@ -730,7 +730,7 @@ impl Render for NewProcessModal {
                         container
                             .child(
                                 h_flex().child(
-                                    Button::new("edit-custom-debug", "Edit in debug.json")
+                                    Button::new("edit-custom-debug", i18n::tr("Edit in debug.json"))
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.save_debug_scenario(window, cx);
                                         }))
@@ -747,7 +747,7 @@ impl Render for NewProcessModal {
                                 ),
                             )
                             .child(
-                                Button::new("debugger-spawn", "Start")
+                                Button::new("debugger-spawn", i18n::tr("Start"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.start_new_session(window, cx)
                                     }))
@@ -777,7 +777,7 @@ impl Render for NewProcessModal {
                         let secondary_action = menu::SecondaryConfirm.boxed_clone();
                         container
                             .child(div().child({
-                                Button::new("edit-attach-task", "Edit in debug.json")
+                                Button::new("edit-attach-task", i18n::tr("Edit in debug.json"))
                                     .key_binding(KeyBinding::for_action(&*secondary_action, cx))
                                     .on_click(move |_, window, cx| {
                                         window.dispatch_action(secondary_action.boxed_clone(), cx)
@@ -930,7 +930,7 @@ impl ConfigureMode {
             .child(
                 h_flex()
                     .gap_1()
-                    .child(Label::new("Debugger:").color(Color::Muted))
+                    .child(Label::new(i18n::tr("Debugger:")).color(Color::Muted))
                     .child(adapter_menu),
             )
             .child(self.program.clone())
@@ -1488,7 +1488,7 @@ impl PickerDelegate for DebugDelegate {
             .child({
                 let action = menu::SecondaryConfirm.boxed_clone();
                 if self.matches.is_empty() {
-                    Button::new("edit-debug-json", "Edit debug.json").on_click(cx.listener(
+                    Button::new("edit-debug-json", i18n::tr("Edit debug.json")).on_click(cx.listener(
                         |_picker, _, window, cx| {
                             window.dispatch_action(
                                 wu_actions::OpenProjectDebugTasks.boxed_clone(),
@@ -1498,7 +1498,7 @@ impl PickerDelegate for DebugDelegate {
                         },
                     ))
                 } else {
-                    Button::new("edit-debug-task", "Edit in debug.json")
+                    Button::new("edit-debug-task", i18n::tr("Edit in debug.json"))
                         .key_binding(KeyBinding::for_action(&*action, cx))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(action.boxed_clone(), cx)
@@ -1509,7 +1509,7 @@ impl PickerDelegate for DebugDelegate {
                 if (current_modifiers.alt || self.matches.is_empty()) && !self.prompt.is_empty() {
                     let action = picker::ConfirmInput { secondary: false }.boxed_clone();
                     this.child({
-                        Button::new("launch-custom", "Launch Custom")
+                        Button::new("launch-custom", i18n::tr("Launch Custom"))
                             .key_binding(KeyBinding::for_action(&*action, cx))
                             .on_click(move |_, window, cx| {
                                 window.dispatch_action(action.boxed_clone(), cx)

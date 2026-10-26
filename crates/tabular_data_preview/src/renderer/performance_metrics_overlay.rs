@@ -35,7 +35,7 @@ impl TabularDataPreviewPane {
             .flex()
             .flex_col()
             .gap_1()
-            .child("Performance metrics:")
+            .child(i18n::tr("Performance metrics:"))
             .children(
                 format_performance_metrics(&self.performance_metrics)
                     .into_iter()

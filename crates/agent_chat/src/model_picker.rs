@@ -566,7 +566,7 @@ impl ModelPicker {
         menu_row("picker-setting-permissions", cx)
             .h(px(height))
             .py(px(0.))
-            .child(div().flex_1().min_w_0().truncate().child("Permissions"))
+            .child(div().flex_1().min_w_0().truncate().child(i18n::tr("Permissions")))
             .child(
                 div()
                     .max_w(px(120.))
@@ -632,7 +632,7 @@ impl ModelPicker {
                     .child(
                         menu_row("picker-permissions-back", cx)
                             .flex_none()
-                            .tooltip(Tooltip::text("Back"))
+                            .tooltip(Tooltip::text(i18n::tr("Back")))
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.show_settings(window, cx)),
                             )
@@ -642,7 +642,7 @@ impl ModelPicker {
                         div()
                             .text_size(ui(13.))
                             .text_color(colors.text.opacity(0.9))
-                            .child("Permissions"),
+                            .child(i18n::tr("Permissions")),
                     ),
             )
             .child(v_flex().p(px(CARD_INSET)).gap(px(MENU_GAP)).children(rows))
@@ -1411,7 +1411,7 @@ impl ModelPicker {
                     .child(
                         menu_row("picker-back", cx)
                             .flex_none()
-                            .tooltip(Tooltip::text("Back"))
+                            .tooltip(Tooltip::text(i18n::tr("Back")))
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.show_settings(window, cx)),
                             )
@@ -1543,7 +1543,7 @@ impl ModelPicker {
                         .h(px(FULL_SLIDER_LABEL_HEIGHT))
                         .text_size(ui(13.))
                         .text_color(colors.text.opacity(0.9))
-                        .child(div().flex_1().child("Reasoning"))
+                        .child(div().flex_1().child(i18n::tr("Reasoning")))
                         .child(div().text_color(colors.text_muted).child(effort)),
                 )
                 .child(self.render_slider(&ladder, selected_index, selection.fast_on(), cx))

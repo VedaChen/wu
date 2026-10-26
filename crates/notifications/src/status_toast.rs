@@ -95,12 +95,15 @@ impl Render for StatusToast {
             .bg(cx.theme().colors().surface_background)
             .shadow_lg()
             .when_some(self.icon.clone(), |this, icon| this.child(icon))
-            .child(Label::new(self.text.clone()).color(Color::Default))
+            .child(
+                Label::new(i18n::tr(self.text.as_ref())).color(Color::Default),
+            )
             .when_some(self.action.as_ref(), |this, action| {
+                let action_label = i18n::tr(action.label.as_ref());
                 this.child(
-                    Button::new(action.id.clone(), action.label.clone())
+                    Button::new(action.id.clone(), action_label.clone())
                         .tooltip(Tooltip::for_action_title(
-                            action.label.clone(),
+                            action_label,
                             &toast::RunAction,
                         ))
                         .color(Color::Muted)
@@ -116,7 +119,7 @@ impl Render for StatusToast {
                         .shape(ui::IconButtonShape::Square)
                         .icon_size(IconSize::Small)
                         .icon_color(Color::Muted)
-                        .tooltip(Tooltip::text("Dismiss"))
+                        .tooltip(Tooltip::text(i18n::tr("Dismiss")))
                         .on_click(move |_click_event, _window, cx| {
                             handle.update(cx, |_, cx| {
                                 cx.emit(DismissEvent);

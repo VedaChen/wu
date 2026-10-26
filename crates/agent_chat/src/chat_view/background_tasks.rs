@@ -184,7 +184,7 @@ impl Render for BackgroundTasksCard {
                         .pb(px(6.))
                         .text_size(ui(12.))
                         .text_color(muted)
-                        .child("Nothing is running in the background."),
+                        .child(i18n::tr("Nothing is running in the background.")),
                 )
             })
             .child(

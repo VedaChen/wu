@@ -197,6 +197,7 @@ impl VsCodeSettings {
             log: None,
             node: self.node_binary_settings(),
 
+            ui_language: None,
             outline_panel: self.outline_panel_settings_content(),
             preview_tabs: self.preview_tabs_settings_content(),
             project: self.project_settings_content(),

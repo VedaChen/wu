@@ -952,7 +952,7 @@ impl Editor {
                         .size_full()
                         .font(ThemeSettings::get_global(cx).buffer_font.clone())
                         .border_color(cx.theme().status().hint)
-                        .child("\\n")
+                        .child(i18n::tr("\\n"))
                         .into_any()
                 }),
                 constrain_width: false,

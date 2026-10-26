@@ -116,7 +116,7 @@ impl Component for ListSubHeader {
                         single_example(
                             "With End Slot",
                             ListSubHeader::new("Recent")
-                                .end_slot(Label::new("3").color(Color::Muted).into_any_element())
+                                .end_slot(Label::new(i18n::tr("3")).color(Color::Muted).into_any_element())
                                 .into_any_element(),
                         ),
                     ],

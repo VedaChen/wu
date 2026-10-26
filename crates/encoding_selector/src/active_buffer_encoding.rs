@@ -73,11 +73,11 @@ impl Render for ActiveBufferEncoding {
         }
 
         let (disabled, tooltip_text) = if self.is_dirty {
-            (true, "Save file to change encoding")
+            (true, i18n::tr("Save file to change encoding"))
         } else if self.is_via_remote_server {
-            (true, "Cannot change encoding of remote server file")
+            (true, i18n::tr("Cannot change encoding of remote server file"))
         } else {
-            (false, "Reopen with Encoding")
+            (false, i18n::tr("Reopen with Encoding"))
         };
 
         div().child(
@@ -96,9 +96,9 @@ impl Render for ActiveBufferEncoding {
                 }))
                 .tooltip(move |_window, cx| {
                     if disabled {
-                        Tooltip::text(tooltip_text)(_window, cx)
+                        Tooltip::text(tooltip_text.clone())(_window, cx)
                     } else {
-                        Tooltip::for_action(tooltip_text, &Toggle, cx)
+                        Tooltip::for_action(tooltip_text.clone(), &Toggle, cx)
                     }
                 }),
         )

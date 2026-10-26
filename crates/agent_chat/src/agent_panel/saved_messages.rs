@@ -157,7 +157,7 @@ impl AgentPanel {
                 .cursor_pointer()
                 .visible_on_hover(group.clone())
                 .hover(|style| style.bg(colors.element_hover))
-                .tooltip(Tooltip::text("Remove from saved"))
+                .tooltip(Tooltip::text(i18n::tr("Remove from saved")))
                 .child(glyph(IconName::AgentClose, 11., colors.text_muted))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();

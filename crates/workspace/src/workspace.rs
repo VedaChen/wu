@@ -661,7 +661,8 @@ fn handle_file_permalink(
                 } else {
                     "open file permalink"
                 };
-                let message = format!("Failed to {action}: {err}");
+                let action = i18n::tr(action);
+                let message = i18n::tr_format("Failed to {action}: {error}", &[("action", &action), ("error", &err.to_string())]);
                 anyhow::Result::<()>::Err(err).log_err();
 
                 workspace
@@ -3506,9 +3507,9 @@ impl Workspace {
                         );
                         window.prompt(
                             PromptLevel::Warning,
-                            "Do you want to save all changes in the following files?",
+                            &i18n::tr("Do you want to save all changes in the following files?"),
                             Some(&detail),
-                            &["Save all", "Discard all", "Cancel"],
+                            &[i18n::tr("Save all").as_ref(), i18n::tr("Discard all").as_ref(), i18n::tr("Cancel").as_ref()],
                             cx,
                         )
                     })?;
@@ -7113,7 +7114,7 @@ impl Workspace {
             .id(dock_element_id)
             .when(dock_is_open, |this| {
                 this.role(gpui::Role::Complementary)
-                    .aria_label(dock_label)
+                    .aria_label(i18n::tr(dock_label))
                     .when(a11y_active, |this| {
                         this.track_focus(self.region_focus_handles.dock(position))
                     })
@@ -7322,7 +7323,7 @@ impl Workspace {
         div()
             .id("editor-region")
             .role(gpui::Role::Main)
-            .aria_label("Editor")
+            .aria_label(i18n::tr("Editor"))
             .when(window.is_a11y_active(), |this| {
                 this.track_focus(&self.region_focus_handles.editor)
             })
@@ -7767,7 +7768,7 @@ fn notify_if_database_failed(window: WindowHandle<MultiWorkspace>, cx: &mut Asyn
                         cx,
                         |cx| {
                             cx.new(|cx| {
-                                MessageNotification::new("Failed to load the database file.", cx)
+                                MessageNotification::new(i18n::tr("Failed to load the database file."), cx)
                             })
                         },
                     );
@@ -7925,7 +7926,7 @@ impl Render for Workspace {
                         .track_focus(&self.titlebar_focus_handle)
                         .tab_group()
                         .role(gpui::Role::Toolbar)
-                        .aria_label("Title bar")
+                        .aria_label(i18n::tr("Title bar"))
                         .on_key_down(cx.listener(
                             |workspace, event: &gpui::KeyDownEvent, window, cx| {
                                 if event.keystroke.modifiers.modified() {
@@ -9003,7 +9004,7 @@ pub fn open_paths(
                 workspace.update(cx, |workspace, cx| {
                     for item in open_task.iter().flatten() {
                         if let Err(e) = item {
-                            workspace.show_error(format!("Error: {e}"), cx);
+                            workspace.show_error(i18n::tr_format("Error: {error}", &[("error", &e.to_string())]), cx);
                         }
                     }
                 });
@@ -9047,10 +9048,10 @@ pub fn open_paths(
                     workspace.update(cx, |workspace, cx| {
                         workspace.show_notification(NotificationId::unique::<OpenInWsl>(), cx, move |cx| {
                             let display_path = util::markdown::MarkdownInlineCode(&path.to_string_lossy());
-                            let msg = format!("{display_path} is inside a WSL filesystem, some features may not work unless you open it with WSL remote");
+                            let msg = i18n::tr_format("{path} is inside a WSL filesystem, some features may not work unless you open it with WSL remote", &[("path", &display_path.to_string())]);
                             cx.new(move |cx| {
                                 MessageNotification::new(msg, cx)
-                                    .primary_message("Open in WSL")
+                                    .primary_message(i18n::tr("Open in WSL"))
                                     .primary_icon(IconName::FolderOpen)
                                     .primary_on_click(move |window, cx| {
                                         window.dispatch_action(Box::new(remote::OpenWslPath {
@@ -9336,10 +9337,10 @@ async fn open_remote_project_inner(
         for error in project_path_errors {
             if error.error_code() == proto::ErrorCode::DevServerProjectPathDoesNotExist {
                 if let Some(path) = error.error_tag("path") {
-                    workspace.show_error(format!("'{path}' does not exist"), cx)
+                    workspace.show_error(i18n::tr_format("'{path}' does not exist", &[("path", &path)]), cx)
                 }
             } else {
-                workspace.show_error(format!("{error}"), cx)
+                workspace.show_error(i18n::tr_format("{error}", &[("error", &error.to_string())]), cx)
             }
         }
     });
@@ -9400,9 +9401,9 @@ pub fn reload(cx: &mut App) {
             .update(cx, |_, window, cx| {
                 window.prompt(
                     PromptLevel::Info,
-                    "Are you sure you want to restart?",
+                    &i18n::tr("Are you sure you want to restart?"),
                     None,
-                    &["Restart", "Cancel"],
+                    &[i18n::tr("Restart").as_ref(), i18n::tr("Cancel").as_ref()],
                     cx,
                 )
             })
@@ -9505,8 +9506,8 @@ async fn confirm_quit_warning(
             window.prompt(
                 PromptLevel::Warning,
                 &warning,
-                Some("Closing Wu now stops it."),
-                &["Cancel", "Close Wu"],
+                Some(i18n::tr("Closing Wu now stops it.").as_ref()),
+                &[i18n::tr("Cancel").as_ref(), i18n::tr("Close Wu").as_ref()],
                 cx,
             )
         })

@@ -1365,6 +1365,10 @@
   // Automatically update Wu. This setting may be ignored on Linux if
   // installed through a package manager.
   "auto_update": true,
+  // The language used for the Wu interface.
+  //
+  // Default: "en"
+  "ui_language": "en",
   // How to render LSP `textDocument/documentColor` colors in the editor.
   //
   // Possible values:

@@ -1271,7 +1271,7 @@ impl SearchPanel {
             )
             .shape(IconButtonShape::Square)
             .icon_size(IconSize::Small)
-            .tooltip(Tooltip::text("Replace All in File"))
+            .tooltip(Tooltip::text(i18n::tr("Replace All in File")))
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
                 this.replace_file(file_index, window, cx);
@@ -1397,7 +1397,7 @@ impl SearchPanel {
             )
             .shape(IconButtonShape::Square)
             .icon_size(IconSize::Small)
-            .tooltip(Tooltip::text("Replace"))
+            .tooltip(Tooltip::text(i18n::tr("Replace")))
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
                 this.replace_match(file_index, match_index, window, cx);

@@ -214,7 +214,7 @@ impl Component for ListHeader {
                         single_example(
                             "With End Slot",
                             ListHeader::new("Recent")
-                                .end_slot(Label::new("5").color(Color::Muted))
+                                .end_slot(Label::new(i18n::tr("5")).color(Color::Muted))
                                 .into_any_element(),
                         ),
                     ],

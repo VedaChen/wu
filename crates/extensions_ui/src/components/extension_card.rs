@@ -69,7 +69,7 @@ struct ExtensionCardDetails {
     authors: SharedString,
     repository_url: Option<SharedString>,
     repository_icon: IconName,
-    provided_features: Vec<&'static str>,
+    provided_features: Vec<SharedString>,
     source: ExtensionCardSource,
 }
 
@@ -193,7 +193,7 @@ impl ExtensionCard {
     fn uninstall_button<const ENABLE_HANDLERS: bool>(extension_id: &Arc<str>) -> Button {
         Button::new(
             Self::button_id(extension_id, ExtensionOperation::Remove),
-            "Uninstall",
+            i18n::tr("Uninstall"),
         )
         .when(ENABLE_HANDLERS, |button| {
             button.on_click({
@@ -215,7 +215,7 @@ impl ExtensionCard {
     ) -> ExtensionCardActions {
         let rebuild = Button::new(
             SharedString::from(format!("rebuild-{}", extension.id)),
-            "Rebuild",
+            i18n::tr("Rebuild"),
         )
         .color(Color::Accent)
         .disabled(status.disables_actions())
@@ -238,7 +238,7 @@ impl ExtensionCard {
     fn install_button<const ENABLE_HANDLERS: bool>(extension_id: &Arc<str>) -> Button {
         Button::new(
             Self::button_id(extension_id, ExtensionOperation::Install),
-            "Install",
+            i18n::tr("Install"),
         )
         .style(ButtonStyle::Tinted(ui::TintColor::Accent))
         .start_icon(
@@ -281,7 +281,7 @@ impl ExtensionCard {
                 let upgrade = matches!(status, ExtensionStatus::Upgrading).then(|| {
                     Button::new(
                         Self::button_id(&extension.id, ExtensionOperation::Upgrade),
-                        "Upgrade",
+                        i18n::tr("Upgrade"),
                     )
                     .disabled(status.disables_actions())
                 });
@@ -297,7 +297,7 @@ impl ExtensionCard {
                     );
                     Button::new(
                         Self::button_id(&extension.id, ExtensionOperation::Upgrade),
-                        "Upgrade",
+                        i18n::tr("Upgrade"),
                     )
                     .style(ButtonStyle::Tinted(ui::TintColor::Accent))
                     .when(!is_compatible, |button| {
@@ -305,8 +305,9 @@ impl ExtensionCard {
                             let version = extension.manifest.version.clone();
                             move |_, cx| {
                                 Tooltip::simple(
-                                    format!(
-                                        "v{version} is not compatible with this version of Wu."
+                                    i18n::tr_format(
+                                        "v{version} is not compatible with this version of Wu.",
+                                        &[("version", version.as_ref())],
                                     ),
                                     cx,
                                 )
@@ -354,7 +355,7 @@ impl ExtensionCard {
 
 fn provided_feature_labels(
     provides: impl IntoIterator<Item = ExtensionProvides>,
-) -> Vec<&'static str> {
+) -> Vec<SharedString> {
     provides
         .into_iter()
         .filter(|provides| !provides.is_deprecated())
@@ -362,8 +363,8 @@ fn provided_feature_labels(
         .collect()
 }
 
-pub(crate) fn extension_provides_label(provides: ExtensionProvides) -> &'static str {
-    match provides {
+pub(crate) fn extension_provides_label(provides: ExtensionProvides) -> SharedString {
+    i18n::tr(match provides {
         ExtensionProvides::Themes => "Themes",
         ExtensionProvides::IconThemes => "Icon Themes",
         ExtensionProvides::Languages => "Languages",
@@ -375,7 +376,7 @@ pub(crate) fn extension_provides_label(provides: ExtensionProvides) -> &'static 
         ExtensionProvides::IndexedDocsProviders => "Indexed Docs Providers",
         ExtensionProvides::Snippets => "Snippets",
         ExtensionProvides::DebugAdapters => "Debug Adapters",
-    }
+    })
 }
 
 fn preview_dev_card(extension: Arc<ExtensionManifest>, status: ExtensionStatus) -> ExtensionCard {
@@ -622,9 +623,12 @@ impl RenderOnce for ExtensionCard {
                                 .truncate()
                         }))
                         .children(download_count.map(|download_count| {
-                            Label::new(format!(
-                                "Downloads: {}",
-                                download_count.to_formatted_string(&Locale::en)
+                            Label::new(i18n::tr_format(
+                                "Downloads: {count}",
+                                &[(
+                                    "count",
+                                    &download_count.to_formatted_string(&Locale::en),
+                                )],
                             ))
                             .size(LabelSize::Small)
                         })),
@@ -661,7 +665,7 @@ impl RenderOnce for ExtensionCard {
                                             .icon_size(IconSize::Small)
                                             .tooltip(move |_, cx| {
                                                 Tooltip::with_meta(
-                                                    "Visit Extension Repository",
+                                                    i18n::tr("Visit Extension Repository"),
                                                     None,
                                                     repository_url_for_tooltip.clone(),
                                                     cx,
@@ -710,7 +714,7 @@ impl RenderOnce for ExtensionCard {
                             .size_full()
                             .justify_center()
                             .bg(cx.theme().colors().elevated_surface_background.alpha(0.8))
-                            .child(Label::new("Overridden by dev extension.")),
+                            .child(Label::new(i18n::tr("Overridden by dev extension."))),
                     )
                 }),
         )

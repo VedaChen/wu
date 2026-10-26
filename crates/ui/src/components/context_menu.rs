@@ -2449,13 +2449,13 @@ mod tests {
         let cx = cx.add_empty_window();
         let context_menu = cx.update(|window, cx| {
             ContextMenu::build(window, cx, |menu, _, _| {
-                menu.header("First header")
+                menu.header(i18n::tr("First header"))
                     .separator()
-                    .entry("First entry", None, |_, _| {})
+                    .entry(i18n::tr("First entry"), None, |_, _| {})
                     .separator()
                     .separator()
-                    .entry("Last entry", None, |_, _| {})
-                    .header("Last header")
+                    .entry(i18n::tr("Last entry"), None, |_, _| {})
+                    .header(i18n::tr("Last header"))
             })
         });
 

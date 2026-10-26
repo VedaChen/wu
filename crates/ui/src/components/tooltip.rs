@@ -282,8 +282,8 @@ impl Component for Tooltip {
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
         example_group(vec![single_example(
             "Text only",
-            Button::new("delete-example", "Delete")
-                .tooltip(Tooltip::text("This is a tooltip!"))
+            Button::new("delete-example", i18n::tr("Delete"))
+                .tooltip(Tooltip::text(i18n::tr("This is a tooltip!")))
                 .into_any_element(),
         )])
         .into_any_element()
